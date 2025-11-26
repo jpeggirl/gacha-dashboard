@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+  <div class="p-4 bg-blue-500 text-white">
+    <h1>If you see this, Tailwind is working</h1>
+  </div>
+  <div id="root"></div>
+  <script type="module">
+    import React from 'https://esm.sh/react@18';
+    import ReactDOM from 'https://esm.sh/react-dom@18/client';
+    
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(React.createElement('div', { className: 'p-4 bg-green-500 text-white' }, 'If you see this, React is working'));
+  </script>
+</body>
+</html>
+
