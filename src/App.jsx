@@ -253,48 +253,54 @@ function App() {
                 onTimeFrameChange={setTimeFrame}
               />
 
-              {/* KPI Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                <KPICard 
-                  title="Total Spent" 
-                  value={`$${stats.totalSpent.toLocaleString()}`} 
-                  subtext={timeFrame === 'all' ? 'Lifetime Revenue' : timeFrame === '7d' ? 'Last 7 Days' : 'Last 30 Days'}
-                  icon={DollarSign}
-                />
-                <KPICard 
-                  title="Packs Purchased" 
-                  value={stats.totalPacks} 
-                  subtext={timeFrame === 'all' ? 'Total Volume' : timeFrame === '7d' ? 'Last 7 Days' : 'Last 30 Days'}
-                  icon={Package}
-                />
-                <KPICard 
-                  title="Avg Order Value" 
-                  value={`$${stats.avgOrderValue.toFixed(0)}`} 
-                  subtext="Per Transaction"
-                  icon={TrendingUp}
-                />
-                <KPICard 
-                  title="Top Purchase" 
-                  value={stats.pieData[0]?.name || 'N/A'} 
-                  subtext={`${stats.pieData[0]?.count || 0} times`}
-                  icon={CheckCircle2}
-                />
+              <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-6">
+                <div>
+                  {/* KPI Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                    <KPICard 
+                      title="Total Spent" 
+                      value={`$${stats.totalSpent.toLocaleString()}`} 
+                      subtext={timeFrame === 'all' ? 'Lifetime Revenue' : timeFrame === '7d' ? 'Last 7 Days' : 'Last 30 Days'}
+                      icon={DollarSign}
+                    />
+                    <KPICard 
+                      title="Packs Purchased" 
+                      value={stats.totalPacks} 
+                      subtext={timeFrame === 'all' ? 'Total Volume' : timeFrame === '7d' ? 'Last 7 Days' : 'Last 30 Days'}
+                      icon={Package}
+                    />
+                    <KPICard 
+                      title="Avg Order Value" 
+                      value={`$${stats.avgOrderValue.toFixed(0)}`} 
+                      subtext="Per Transaction"
+                      icon={TrendingUp}
+                    />
+                    <KPICard 
+                      title="Top Purchase" 
+                      value={stats.pieData[0]?.name || 'N/A'} 
+                      subtext={`${stats.pieData[0]?.count || 0} times`}
+                      icon={CheckCircle2}
+                    />
+                  </div>
+
+                  {/* Charts Section */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                    <SpendingMixChart pieData={stats.pieData} />
+                    <ActivityChart chartData={stats.chartData} />
+                  </div>
+
+                  {/* Transaction Table */}
+                  <TransactionTable
+                    transactions={stats.transactions}
+                    priceToNameMap={stats.priceToNameMap}
+                  />
+                </div>
+
+                {/* Profile Comments Sidebar */}
+                <div className="xl:sticky xl:top-24 h-fit">
+                  <ProfileComments walletAddress={stats.wallet} />
+                </div>
               </div>
-
-              {/* Charts Section */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-                <SpendingMixChart pieData={stats.pieData} />
-                <ActivityChart chartData={stats.chartData} />
-              </div>
-
-              {/* Transaction Table */}
-              <TransactionTable
-                transactions={stats.transactions}
-                priceToNameMap={stats.priceToNameMap}
-              />
-
-              {/* Profile Comments Section */}
-              <ProfileComments walletAddress={stats.wallet} />
             </>
           ) : (
             !loading && !error && <EmptyState />
