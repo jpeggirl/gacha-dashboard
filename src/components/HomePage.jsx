@@ -4,7 +4,13 @@ import { getAnnouncementsFeed } from '../services/supabaseService';
 import { supabase, isSupabaseReady } from '../config/supabase';
 import Leaderboard from './Leaderboard';
 
-const HomePage = ({ onNavigateToWallet }) => {
+const HomePage = ({ onNavigateToWallet: originalNavigateToWallet }) => {
+  // Create a wrapper function that accepts wallet address
+  const handleNavigateToWallet = (walletAddress) => {
+    if (originalNavigateToWallet && walletAddress) {
+      originalNavigateToWallet(walletAddress);
+    }
+  };
   const [feedItems, setFeedItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -76,7 +82,7 @@ const HomePage = ({ onNavigateToWallet }) => {
 
         {/* Leaderboard Section */}
         <div className="mb-8">
-          <Leaderboard />
+          <Leaderboard onNavigateToWallet={handleNavigateToWallet} />
         </div>
 
         {/* Live Feed Section - Shows all profile comments from all wallets */}

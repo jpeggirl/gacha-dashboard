@@ -4,7 +4,7 @@ A production-ready React dashboard for analyzing gacha game wallet purchases and
 
 ## Features
 
-- 🔐 Multi-user password-protected admin access (Tania, Chase, Kush, Denx, Angela)
+- 🔐 Multi-user password-protected admin access (Admin, Tania, Chase, Kush, Denx, Angela)
 - 👤 User identification - comments show which user added them
 - 🏠 Homepage with live feed of all profile comments
 - 🔍 Wallet address search and analysis
@@ -63,6 +63,7 @@ npm install
 VITE_ADMIN_PASSWORD="your-api-password-here"
 
 # User Login Passwords (optional - defaults provided)
+VITE_USER_ADMIN_PASSWORD="admin123"
 VITE_USER_TANIA_PASSWORD="tania123"
 VITE_USER_CHASE_PASSWORD="chase123"
 VITE_USER_KUSH_PASSWORD="kush123"
@@ -106,13 +107,14 @@ The `.env` file supports the following variables:
 - **VITE_USER_KUSH_PASSWORD**: Login password for Kush (default: `kush123`)
 - **VITE_USER_DENX_PASSWORD**: Login password for Denx (default: `denx123`)
 - **VITE_USER_ANGELA_PASSWORD**: Login password for Angela (default: `angela123`)
+- **VITE_USER_ADMIN_PASSWORD**: Login password for the shared Admin account (default: `admin123`)
 - **VITE_SUPABASE_URL**: Your Supabase project URL
 - **VITE_SUPABASE_ANON_KEY**: Your Supabase anonymous key
 
 ### Security
 
 The dashboard supports multiple users with individual passwords:
-- **Tania**, **Chase**, **Kush**, **Denx**, and **Angela** each have their own login password
+- **Admin**, **Tania**, **Chase**, **Kush**, **Denx**, and **Angela** each have their own login password
 - Default passwords are provided for development (e.g., `tania123`, `chase123`, etc.)
 - To set custom passwords, add them to your `.env` file
 - When users add comments to profiles, their name is automatically recorded and displayed

@@ -70,10 +70,12 @@ function App() {
     setIsAuthenticated(false);
   };
 
-  const fetchData = async (e) => {
+  const fetchData = async (e, walletAddress = null) => {
     if (e) e.preventDefault();
     
-    if (!searchTerm.trim()) {
+    const addressToSearch = walletAddress || searchTerm;
+    
+    if (!addressToSearch || !addressToSearch.trim()) {
       setError("Please enter a wallet address.");
       setData(null);
       return;
@@ -82,18 +84,23 @@ function App() {
     setLoading(true);
     setError(null);
     
+    // Update searchTerm if walletAddress was provided
+    if (walletAddress) {
+      setSearchTerm(walletAddress);
+    }
+    
     try {
-      const jsonData = await fetchPackPurchases(searchTerm);
+      const jsonData = await fetchPackPurchases(addressToSearch.trim());
       setData(jsonData);
       setDataSource('api');
     } catch (err) {
       console.warn("API failed, using mock fallback.", {
         error: err.message,
         name: err.name,
-        wallet: searchTerm
+        wallet: addressToSearch
       });
       // Fallback to Mock Data matching the structure
-      const mock = generateMockData(searchTerm);
+      const mock = generateMockData(addressToSearch.trim());
       
       // Simulate network delay for better UX
       await new Promise(resolve => setTimeout(resolve, 600));
@@ -202,9 +209,9 @@ function App() {
           currentView={currentView}
           onNavigateHome={() => setCurrentView('home')}
         />
-        <HomePage onNavigateToWallet={() => {
+        <HomePage onNavigateToWallet={(walletAddress) => {
           setCurrentView('wallet');
-          fetchData();
+          fetchData(null, walletAddress);
         }} />
       </div>
     );

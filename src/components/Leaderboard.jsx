@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Trophy, Calendar, ExternalLink, RefreshCw } from 'lucide-react';
 import { fetchLeaderboard } from '../services/leaderboardApi';
 
-const Leaderboard = () => {
+const Leaderboard = ({ onNavigateToWallet }) => {
   const [leaderboardType, setLeaderboardType] = useState('total'); // 'total' or 'weekly'
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -192,9 +192,13 @@ const Leaderboard = () => {
                           <span className="text-slate-700 font-semibold">{displayName}</span>
                         )}
                         {wallet && (
-                          <p className="text-xs text-slate-500 font-mono mt-1">
+                          <button
+                            onClick={() => onNavigateToWallet && onNavigateToWallet(wallet)}
+                            className="text-xs text-slate-500 font-mono mt-1 hover:text-indigo-600 hover:underline transition-colors cursor-pointer"
+                            title={`View profile for ${wallet}`}
+                          >
                             {wallet.slice(0, 6)}...{wallet.slice(-4)}
-                          </p>
+                          </button>
                         )}
                       </div>
                       

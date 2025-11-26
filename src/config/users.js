@@ -2,6 +2,10 @@
 // In production, these should be stored securely (e.g., environment variables or a secure backend)
 
 export const USERS = {
+  admin: {
+    name: 'Admin',
+    password: import.meta.env.VITE_USER_ADMIN_PASSWORD || 'admin123'
+  },
   tania: {
     name: 'Tania',
     password: import.meta.env.VITE_USER_TANIA_PASSWORD || 'tania123'

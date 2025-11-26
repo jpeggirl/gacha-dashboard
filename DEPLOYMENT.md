@@ -43,6 +43,7 @@ vercel --prod
 4. Vercel will auto-detect Vite settings
 5. **Important**: Add these environment variables in Vercel dashboard:
    - `VITE_ADMIN_PASSWORD` - Your API admin password
+   - `VITE_USER_ADMIN_PASSWORD` - Shared admin login password
    - `VITE_USER_TANIA_PASSWORD` - Tania's login password
    - `VITE_USER_CHASE_PASSWORD` - Chase's login password
    - `VITE_USER_KUSH_PASSWORD` - Kush's login password
