@@ -3,6 +3,7 @@ import { MessageSquare, Send, Plus, Search, Activity, Wallet } from 'lucide-reac
 import { getAnnouncementsFeed } from '../services/supabaseService';
 import { supabase, isSupabaseReady } from '../config/supabase';
 import Leaderboard from './Leaderboard';
+import Summary from './Summary';
 
 const HomePage = ({ onNavigateToWallet }) => {
   // Create a wrapper function that accepts wallet address
@@ -78,6 +79,11 @@ const HomePage = ({ onNavigateToWallet }) => {
               Search Wallet Address
             </button>
           </div>
+        </div>
+
+        {/* Summary Section */}
+        <div className="mb-8">
+          <Summary />
         </div>
 
         {/* Leaderboard + Live Feed layout */}
