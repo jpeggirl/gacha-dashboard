@@ -1,17 +1,17 @@
 // API Configuration
-// Note: In .env file, if password contains $, it should be: VITE_ADMIN_PASSWORD='sleekpokemon25!@#\$'
-// Or use quotes: VITE_ADMIN_PASSWORD="sleekpokemon25!@#$"
-const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'sleekpokemon25!@#$';
+// Note: In .env file, if password contains special characters, use quotes: VITE_ADMIN_PASSWORD="your-password"
+const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD;
+
+if (!ADMIN_PASSWORD) {
+  console.error('[Config] VITE_ADMIN_PASSWORD is not set in environment variables!');
+}
 
 // Debug: Log password status (without revealing the actual password)
 if (import.meta.env.DEV) {
   console.log('[Config] Admin password loaded:', {
     fromEnv: !!import.meta.env.VITE_ADMIN_PASSWORD,
-    length: ADMIN_PASSWORD.length,
-    expectedLength: 18,
-    matches: ADMIN_PASSWORD === 'sleekpokemon25!@#$',
-    firstChar: ADMIN_PASSWORD[0],
-    lastChar: ADMIN_PASSWORD[ADMIN_PASSWORD.length - 1]
+    length: ADMIN_PASSWORD?.length || 0,
+    isSet: !!ADMIN_PASSWORD
   });
 }
 
