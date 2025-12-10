@@ -1,8 +1,38 @@
 import React from 'react';
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight, Gift } from 'lucide-react';
 import { TRANSACTION_LIMIT } from '../config/constants';
 
-const TransactionTable = ({ transactions, priceToNameMap }) => {
+const TransactionTable = ({ transactions, priceToNameMap, freePacks = [] }) => {
+  // Create a Set of free pack transaction hashes for exact matching
+  // freePacks array contains objects with txHash from freePackRedemptions
+  const freePackTxHashes = new Set();
+  freePacks.forEach(pack => {
+    if (pack.txHash) {
+      freePackTxHashes.add(pack.txHash.toLowerCase());
+    }
+  });
+
+  // Check if a transaction is a free pack
+  // Match by txHash (most accurate) or by amount being 0 (fallback)
+  const isFreePack = (tx) => {
+    // If transaction has explicit flag
+    if (tx.isFreePack !== undefined) {
+      return tx.isFreePack;
+    }
+    
+    // Primary method: Match by txHash (most accurate)
+    if (tx.txHash && freePackTxHashes.has(tx.txHash.toLowerCase())) {
+      return true;
+    }
+    
+    // Fallback: If amount is 0, it's likely a free pack
+    // (but only if we don't have free pack data, otherwise trust the txHash matching)
+    if (freePackTxHashes.size === 0 && tx.packAmount === 0) {
+      return true;
+    }
+    
+    return false;
+  };
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
@@ -38,9 +68,17 @@ const TransactionTable = ({ transactions, priceToNameMap }) => {
                   </div>
                 </td>
                 <td className="px-6 py-4">
-                  <span className="font-medium text-indigo-900 bg-indigo-50 px-2 py-1 rounded">
-                    {priceToNameMap[tx.packAmount] || 'Unknown Bundle'}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-indigo-900 bg-indigo-50 px-2 py-1 rounded">
+                      {priceToNameMap[tx.packAmount] || 'Unknown Bundle'}
+                    </span>
+                    {isFreePack(tx) && (
+                      <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 px-2 py-1 rounded text-xs font-semibold border border-emerald-200">
+                        <Gift size={12} />
+                        Free Pack
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-6 py-4">
                   <a
@@ -53,8 +91,12 @@ const TransactionTable = ({ transactions, priceToNameMap }) => {
                     {tx.txHash}
                   </a>
                 </td>
-                <td className="px-6 py-4 text-right font-bold text-slate-700">
-                  ${tx.packAmount}
+                <td className="px-6 py-4 text-right">
+                  {isFreePack(tx) ? (
+                    <span className="font-bold text-emerald-600">Free</span>
+                  ) : (
+                    <span className="font-bold text-slate-700">${tx.packAmount}</span>
+                  )}
                 </td>
                 <td className="px-6 py-4 text-right">
                   <a

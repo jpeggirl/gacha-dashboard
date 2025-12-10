@@ -10,7 +10,35 @@ export const processAnalytics = (data, lifetimeTotalSpent = null) => {
   if (!data) return null;
 
   // 1. Basic KPIs from root object
-  const { totalSpent, totalPacks, packBreakdown, transactions, wallet } = data;
+  const { totalSpent, totalPacks, packBreakdown, transactions, wallet, username } = data;
+  
+  // Extract free packs data - API uses "freePackRedemptions" field
+  const totalFreePacksRedeemed = data.totalFreePacksRedeemed || 0;
+  let freePackRedemptions = data.freePackRedemptions || [];
+  
+  // Ensure freePackRedemptions is an array
+  if (!Array.isArray(freePackRedemptions)) {
+    freePackRedemptions = [];
+  }
+  
+  // Map freePackRedemptions to the format expected by components
+  // API returns: {code, txHash, presetId, redeemedAt}
+  // Component expects: {code, redeemedAt}
+  const freePacks = freePackRedemptions.map(redemption => ({
+    code: redemption.code,
+    redeemedAt: redemption.redeemedAt,
+    txHash: redemption.txHash, // Keep for potential future use
+    presetId: redemption.presetId // Keep for potential future use
+  }));
+  
+  // Debug: Log free packs data to help troubleshoot
+  console.log('[Analytics] Free packs data:', {
+    totalFreePacksRedeemed,
+    freePackRedemptions,
+    freePacks,
+    freePacksLength: freePacks.length,
+    freePacksSample: freePacks.slice(0, 2) // Show first 2 items
+  });
   const avgOrderValue = totalPacks > 0 ? totalSpent / totalPacks : 0;
   
   // Use lifetime total for tier calculation if provided, otherwise use filtered total
@@ -64,8 +92,16 @@ export const processAnalytics = (data, lifetimeTotalSpent = null) => {
     priceToNameMap[p.packAmount] = p.packName;
   });
 
+  // Sort free packs by redemption date (newest first)
+  const sortedFreePacks = (freePacks || []).slice().sort((a, b) => {
+    const dateA = a.redeemedAt ? new Date(a.redeemedAt).getTime() : 0;
+    const dateB = b.redeemedAt ? new Date(b.redeemedAt).getTime() : 0;
+    return dateB - dateA; // Newest first
+  });
+
   return {
     wallet,
+    username,
     totalSpent,
     totalPacks,
     avgOrderValue,
@@ -73,7 +109,9 @@ export const processAnalytics = (data, lifetimeTotalSpent = null) => {
     chartData,
     tier,
     priceToNameMap,
-    transactions: transactions.slice(0, TRANSACTION_LIMIT) // Show last N
+    transactions: transactions.slice(0, TRANSACTION_LIMIT), // Show last N
+    totalFreePacksRedeemed: totalFreePacksRedeemed || 0,
+    freePacks: sortedFreePacks
   };
 };
 

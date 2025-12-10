@@ -46,12 +46,38 @@ export const generateMockData = (wallet) => {
   // Sort transactions by date desc
   transactions.sort((a, b) => new Date(b.loggedAt) - new Date(a.loggedAt));
 
+  // Generate free packs for testing (always include the fields, even if empty)
+  // Some users will have free packs, some won't - this simulates real API behavior
+  const hasFreePacks = Math.random() < 0.3; // 30% chance to have free packs
+  const freePacks = [];
+  if (hasFreePacks) {
+    const numFreePacks = Math.floor(Math.random() * 4) + 1; // 1-4 free packs
+    for (let i = 0; i < numFreePacks; i++) {
+      const freePackDate = new Date(now);
+      freePackDate.setDate(freePackDate.getDate() - Math.floor(Math.random() * 90));
+      
+      // Generate a random code
+      const code = Math.random().toString(36).substring(2, 10).toUpperCase();
+      
+      freePacks.push({
+        code: code,
+        redeemedAt: freePackDate.toISOString()
+      });
+    }
+    // Sort by redemption date (newest first)
+    freePacks.sort((a, b) => new Date(b.redeemedAt) - new Date(a.redeemedAt));
+  }
+
+  // Always include free pack fields in the response (even if 0/empty)
+  // This ensures the feature works for all users
   return {
     wallet: wallet,
     totalPacks: totalPacks,
     totalSpent: totalSpent,
     packBreakdown: Object.values(breakdownMap),
-    transactions: transactions
+    transactions: transactions,
+    totalFreePacksRedeemed: freePacks.length, // Always present, even if 0
+    freePacks: freePacks // Always present, even if empty array
   };
 };
 

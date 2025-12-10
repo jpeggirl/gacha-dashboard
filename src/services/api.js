@@ -52,6 +52,13 @@ export const fetchPackPurchases = async (walletAddress) => {
 
     const data = await response.json();
     console.log('[API Debug] Success! Received data with keys:', Object.keys(data));
+    console.log('[API Debug] Free packs data:', {
+      totalFreePacksRedeemed: data.totalFreePacksRedeemed,
+      freePackRedemptions: data.freePackRedemptions,
+      freePackRedemptionsType: Array.isArray(data.freePackRedemptions) ? 'array' : typeof data.freePackRedemptions,
+      freePackRedemptionsLength: Array.isArray(data.freePackRedemptions) ? data.freePackRedemptions.length : 'not array',
+      freePackRedemptionsSample: Array.isArray(data.freePackRedemptions) ? data.freePackRedemptions.slice(0, 2) : null
+    });
     return data;
   } catch (error) {
     clearTimeout(timeoutId);

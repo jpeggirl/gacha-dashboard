@@ -3,6 +3,7 @@ import { DollarSign, Package, TrendingUp, CheckCircle2, LogOut } from 'lucide-re
 
 // Services
 import { fetchPackPurchases } from './services/api';
+import { fetchLeaderboard } from './services/leaderboardApi';
 import { generateMockData } from './utils/mockData';
 import { processAnalytics } from './utils/analytics';
 
@@ -21,6 +22,7 @@ import TimeFrameFilter from './components/TimeFrameFilter';
 import Login from './components/Login';
 import HomePage from './components/HomePage';
 import ProfileComments from './components/ProfileComments';
+import FreePacksSection from './components/FreePacksSection';
 
 // Config
 import { DEFAULT_WALLET } from './config/constants';
@@ -61,6 +63,7 @@ function App() {
   const [dataSource, setDataSource] = useState(null); // 'api' or 'mock'
   const [timeFrame, setTimeFrame] = useState('all'); // '7d', '30d', 'all'
   const [currentView, setCurrentView] = useState('home'); // 'home' or 'wallet'
+  const [leaderboardData, setLeaderboardData] = useState([]); // Top 50 leaderboard data
 
   const handleLogout = () => {
     sessionStorage.removeItem('admin_authenticated');
@@ -68,6 +71,39 @@ function App() {
     sessionStorage.removeItem('current_username');
     sessionStorage.removeItem('current_user_name');
     setIsAuthenticated(false);
+  };
+
+  // Fetch leaderboard to check if user is in top 50
+  const fetchLeaderboardData = async () => {
+    try {
+      const response = await fetchLeaderboard('total');
+      let leaderboardData = [];
+      
+      // Handle different response structures
+      if (Array.isArray(response)) {
+        leaderboardData = response;
+      } else if (response && response.topRankers && Array.isArray(response.topRankers)) {
+        leaderboardData = response.topRankers;
+      } else if (response && response.data && Array.isArray(response.data)) {
+        leaderboardData = response.data;
+      } else if (response && response.leaderboard && Array.isArray(response.leaderboard)) {
+        leaderboardData = response.leaderboard;
+      }
+      
+      // Get top 50 and ensure they have rank
+      const top50 = leaderboardData
+        .filter(item => item && item.wallet)
+        .slice(0, 50)
+        .map((item, index) => ({
+          ...item,
+          rank: item.rank || index + 1
+        }));
+      
+      setLeaderboardData(top50);
+    } catch (err) {
+      console.warn("Failed to fetch leaderboard:", err);
+      setLeaderboardData([]);
+    }
   };
 
   const fetchData = async (e, walletAddress = null) => {
@@ -93,6 +129,9 @@ function App() {
       const jsonData = await fetchPackPurchases(addressToSearch.trim());
       setData(jsonData);
       setDataSource('api');
+      
+      // Fetch leaderboard to check if user is in top 50
+      await fetchLeaderboardData();
     } catch (err) {
       console.warn("API failed, using mock fallback.", {
         error: err.message,
@@ -107,6 +146,9 @@ function App() {
       
       setData(mock);
       setDataSource('mock');
+      
+      // Still try to fetch leaderboard even with mock data
+      await fetchLeaderboardData();
     } finally {
       setLoading(false);
     }
@@ -172,7 +214,10 @@ function App() {
       transactions: filteredTransactions,
       totalSpent,
       totalPacks,
-      packBreakdown: Object.values(breakdownMap)
+      packBreakdown: Object.values(breakdownMap),
+      // Preserve free packs data (not filtered by time frame)
+      totalFreePacksRedeemed: data.totalFreePacksRedeemed,
+      freePackRedemptions: data.freePackRedemptions || []
     };
   }, [data, timeFrame]);
 
@@ -245,7 +290,17 @@ function App() {
               <UserProfile
                 tier={stats.tier}
                 wallet={stats.wallet}
+                username={stats.username}
                 lastInteraction={stats.transactions[0]?.loggedAt}
+                isTop50={leaderboardData.some(item => 
+                  (item.wallet || item.wallet_address || '').toLowerCase() === stats.wallet.toLowerCase()
+                )}
+                hasFreePacks={(stats.totalFreePacksRedeemed || 0) > 0}
+              />
+
+              <FreePacksSection
+                totalFreePacksRedeemed={stats.totalFreePacksRedeemed}
+                freePacks={stats.freePacks}
               />
 
               <TimeFrameFilter
@@ -293,6 +348,7 @@ function App() {
                   <TransactionTable
                     transactions={stats.transactions}
                     priceToNameMap={stats.priceToNameMap}
+                    freePacks={stats.freePacks}
                   />
                 </div>
 
