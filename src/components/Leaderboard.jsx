@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Trophy, Calendar, ExternalLink, RefreshCw } from 'lucide-react';
 import { fetchLeaderboard } from '../services/leaderboardApi';
+import { getUserTags } from '../services/supabaseService';
+import TagBadge from './TagBadge';
 
 const Leaderboard = ({ onNavigateToWallet }) => {
   const [leaderboardType, setLeaderboardType] = useState('total'); // 'total' or 'weekly'
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [userTags, setUserTags] = useState({}); // Map of wallet -> tags array
 
   useEffect(() => {
     loadLeaderboard();
@@ -56,6 +59,9 @@ const Leaderboard = ({ onNavigateToWallet }) => {
         sample: leaderboardData.slice(0, 3)
       });
       setData(leaderboardData);
+      
+      // Fetch tags for all users in the leaderboard
+      fetchTagsForUsers(leaderboardData);
     } catch (err) {
       setError(err.message || 'Failed to load leaderboard');
       console.error('Error loading leaderboard:', err);
@@ -71,6 +77,31 @@ const Leaderboard = ({ onNavigateToWallet }) => {
     // Remove @ if present
     const cleanUsername = username.replace(/^@/, '');
     return `https://twitter.com/${cleanUsername}`;
+  };
+
+  // Fetch tags for all users in the leaderboard
+  const fetchTagsForUsers = async (leaderboardData) => {
+    if (!leaderboardData || leaderboardData.length === 0) return;
+    
+    const tagsMap = {};
+    
+    // Fetch tags for all wallets in parallel
+    const tagPromises = leaderboardData.map(async (item) => {
+      const wallet = item.wallet || item.wallet_address;
+      if (!wallet) return;
+      
+      try {
+        const { data, error } = await getUserTags(wallet);
+        if (!error && data) {
+          tagsMap[wallet.toLowerCase()] = data;
+        }
+      } catch (err) {
+        console.error(`Error fetching tags for ${wallet}:`, err);
+      }
+    });
+    
+    await Promise.all(tagPromises);
+    setUserTags(tagsMap);
   };
 
   // Get rank emoji
@@ -178,19 +209,28 @@ const Leaderboard = ({ onNavigateToWallet }) => {
                       
                       {/* Username/Twitter */}
                       <div className="flex-1 min-w-0">
-                        {twitterUrl && item.username ? (
-                          <a
-                            href={twitterUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-2 text-indigo-600 hover:text-indigo-700 font-semibold transition-colors group"
-                          >
-                            <span className="truncate">@{displayName.replace(/^@/, '')}</span>
-                            <ExternalLink size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" />
-                          </a>
-                        ) : (
-                          <span className="text-slate-700 font-semibold">{displayName}</span>
-                        )}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {twitterUrl && item.username ? (
+                            <a
+                              href={twitterUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 text-indigo-600 hover:text-indigo-700 font-semibold transition-colors group"
+                            >
+                              <span className="truncate">@{displayName.replace(/^@/, '')}</span>
+                              <ExternalLink size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </a>
+                          ) : (
+                            <span className="text-slate-700 font-semibold">{displayName}</span>
+                          )}
+                          {wallet && userTags[wallet.toLowerCase()] && userTags[wallet.toLowerCase()].length > 0 && (
+                            <div className="flex items-center gap-1 flex-wrap">
+                              {userTags[wallet.toLowerCase()].map((tag) => (
+                                <TagBadge key={tag} tag={tag} size="small" />
+                              ))}
+                            </div>
+                          )}
+                        </div>
                         {wallet && (
                           <button
                             onClick={() => onNavigateToWallet && onNavigateToWallet(wallet)}

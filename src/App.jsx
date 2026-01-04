@@ -23,10 +23,12 @@ import Login from './components/Login';
 import HomePage from './components/HomePage';
 import ProfileComments from './components/ProfileComments';
 import FreePacksSection from './components/FreePacksSection';
+import UserTags from './components/UserTags';
 
 // Config
 import { DEFAULT_WALLET } from './config/constants';
 import { getCurrentUser } from './config/users';
+import { getUserTags } from './services/supabaseService';
 
 function App() {
   // Authentication state
@@ -64,6 +66,7 @@ function App() {
   const [timeFrame, setTimeFrame] = useState('all'); // '7d', '30d', 'all'
   const [currentView, setCurrentView] = useState('home'); // 'home' or 'wallet'
   const [leaderboardData, setLeaderboardData] = useState([]); // Top 50 leaderboard data
+  const [userTags, setUserTags] = useState([]); // Tags for current user
 
   const handleLogout = () => {
     sessionStorage.removeItem('admin_authenticated');
@@ -106,6 +109,32 @@ function App() {
     }
   };
 
+  // Fetch user tags for the current wallet
+  const fetchUserTags = async (walletAddress) => {
+    if (!walletAddress) {
+      setUserTags([]);
+      return;
+    }
+    
+    try {
+      const { data, error } = await getUserTags(walletAddress);
+      if (error) {
+        console.warn("Failed to fetch user tags:", error);
+        setUserTags([]);
+      } else {
+        setUserTags(data || []);
+      }
+    } catch (err) {
+      console.warn("Error fetching user tags:", err);
+      setUserTags([]);
+    }
+  };
+
+  // Handle tags update callback
+  const handleTagsUpdate = (newTags) => {
+    setUserTags(newTags);
+  };
+
   const fetchData = async (e, walletAddress = null) => {
     if (e) e.preventDefault();
     
@@ -132,6 +161,9 @@ function App() {
       
       // Fetch leaderboard to check if user is in top 50
       await fetchLeaderboardData();
+      
+      // Fetch user tags
+      await fetchUserTags(addressToSearch.trim());
     } catch (err) {
       console.warn("API failed, using mock fallback.", {
         error: err.message,
@@ -149,6 +181,9 @@ function App() {
       
       // Still try to fetch leaderboard even with mock data
       await fetchLeaderboardData();
+      
+      // Fetch user tags
+      await fetchUserTags(addressToSearch.trim());
     } finally {
       setLoading(false);
     }
@@ -292,10 +327,12 @@ function App() {
                 wallet={stats.wallet}
                 username={stats.username}
                 lastInteraction={stats.transactions[0]?.loggedAt}
-                isTop50={leaderboardData.some(item => 
-                  (item.wallet || item.wallet_address || '').toLowerCase() === stats.wallet.toLowerCase()
-                )}
-                hasFreePacks={(stats.totalFreePacksRedeemed || 0) > 0}
+                tags={userTags}
+              />
+
+              <UserTags
+                walletAddress={stats.wallet}
+                onTagsUpdate={handleTagsUpdate}
               />
 
               <FreePacksSection

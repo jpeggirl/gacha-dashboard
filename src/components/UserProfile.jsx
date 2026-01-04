@@ -1,5 +1,6 @@
 import React from 'react';
 import { User, Wallet, ExternalLink } from 'lucide-react';
+import TagBadge from './TagBadge';
 
 // Format Twitter username to URL
 const getTwitterUrl = (username) => {
@@ -9,7 +10,7 @@ const getTwitterUrl = (username) => {
   return `https://twitter.com/${cleanUsername}`;
 };
 
-const UserProfile = ({ tier, wallet, username, lastInteraction, isTop50 = false, hasFreePacks = false }) => {
+const UserProfile = ({ tier, wallet, username, lastInteraction, tags = [] }) => {
   const twitterUrl = getTwitterUrl(username);
   const displayName = username || 'Anonymous';
 
@@ -34,16 +35,9 @@ const UserProfile = ({ tier, wallet, username, lastInteraction, isTop50 = false,
             ) : (
               <h2 className="text-3xl font-bold text-slate-900">{displayName}</h2>
             )}
-            {isTop50 && (
-              <span className="bg-indigo-100 text-indigo-700 text-xs px-2 py-1 rounded-full font-bold uppercase tracking-wide">
-                VIP
-              </span>
-            )}
-            {hasFreePacks && (
-              <span className="bg-emerald-100 text-emerald-700 text-xs px-2 py-1 rounded-full font-bold uppercase tracking-wide">
-                Free Pack
-              </span>
-            )}
+            {tags && tags.length > 0 && tags.map((tag) => (
+              <TagBadge key={tag} tag={tag} size="small" />
+            ))}
           </div>
           <div className="flex items-center gap-2 text-slate-500 text-sm mt-1">
             <Wallet size={14} />
