@@ -3,7 +3,14 @@
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD;
 
 if (!ADMIN_PASSWORD) {
-  console.error('[Config] VITE_ADMIN_PASSWORD is not set in environment variables!');
+  // Only show error once to reduce console noise
+  if (!window.adminPasswordErrorShown) {
+    console.error('[Config] VITE_ADMIN_PASSWORD is not set in Vercel environment variables!');
+    console.error('[Config] API calls will fail. Add VITE_ADMIN_PASSWORD in Vercel Settings → Environment Variables');
+    if (!import.meta.env.DEV) {
+      window.adminPasswordErrorShown = true;
+    }
+  }
 }
 
 // Debug: Log password status (without revealing the actual password)

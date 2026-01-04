@@ -5,7 +5,7 @@ export const getAnnouncementsFeed = async () => {
   try {
     // Check if Supabase is configured
     if (!isSupabaseReady) {
-      console.warn('Supabase not configured, returning empty feed');
+      // Warning already shown by config
       return { data: [], error: null };
     }
 
@@ -29,7 +29,7 @@ export const getProfileComments = async (walletAddress) => {
   try {
     // Check if Supabase is configured
     if (!isSupabaseReady) {
-      console.warn('Supabase not configured, returning empty comments');
+      // Warning already shown by config
       return { data: [], error: null };
     }
 
@@ -102,7 +102,11 @@ export const getUserProfile = async (walletAddress) => {
   try {
     // Check if Supabase is configured
     if (!isSupabaseReady) {
-      console.warn('Supabase not configured, returning empty profile');
+      // Only log warning once to reduce console noise
+      if (!window.supabaseServiceWarningShown) {
+        console.warn('Supabase not configured, returning empty profile');
+        window.supabaseServiceWarningShown = true;
+      }
       return { data: null, error: null };
     }
 
@@ -138,8 +142,14 @@ export const addUserTag = async (walletAddress, tag, author = 'Admin') => {
   try {
     // Check if Supabase is configured
     if (!isSupabaseReady) {
-      const errorMsg = 'Supabase is not configured. Please set up your Supabase credentials in .env file.';
-      console.error(errorMsg);
+      const errorMsg = 'Supabase is not configured. Please set up your Supabase credentials in Vercel environment variables.';
+      // Only show error once to reduce console noise
+      if (!window.supabaseAddTagErrorShown) {
+        console.error(errorMsg);
+        if (!import.meta.env.DEV) {
+          window.supabaseAddTagErrorShown = true;
+        }
+      }
       return { data: null, error: new Error(errorMsg) };
     }
 
@@ -190,8 +200,14 @@ export const removeUserTag = async (walletAddress, tag) => {
   try {
     // Check if Supabase is configured
     if (!isSupabaseReady) {
-      const errorMsg = 'Supabase is not configured. Please set up your Supabase credentials in .env file.';
-      console.error(errorMsg);
+      const errorMsg = 'Supabase is not configured. Please set up your Supabase credentials in Vercel environment variables.';
+      // Only show error once to reduce console noise
+      if (!window.supabaseRemoveTagErrorShown) {
+        console.error(errorMsg);
+        if (!import.meta.env.DEV) {
+          window.supabaseRemoveTagErrorShown = true;
+        }
+      }
       return { data: null, error: new Error(errorMsg) };
     }
 
@@ -235,8 +251,14 @@ export const updateUserProfile = async (walletAddress, updates, author = 'Admin'
   try {
     // Check if Supabase is configured
     if (!isSupabaseReady) {
-      const errorMsg = 'Supabase is not configured. Please set up your Supabase credentials in .env file.';
-      console.error(errorMsg);
+      const errorMsg = 'Supabase is not configured. Please set up your Supabase credentials in Vercel environment variables.';
+      // Only show error once to reduce console noise
+      if (!window.supabaseUpdateProfileErrorShown) {
+        console.error(errorMsg);
+        if (!import.meta.env.DEV) {
+          window.supabaseUpdateProfileErrorShown = true;
+        }
+      }
       return { data: null, error: new Error(errorMsg) };
     }
 
@@ -274,7 +296,7 @@ export const getAllTags = async () => {
   try {
     // Check if Supabase is configured
     if (!isSupabaseReady) {
-      console.warn('Supabase not configured, returning empty tags');
+      // Warning already shown by getUserProfile
       return { data: [], error: null };
     }
 
@@ -305,7 +327,7 @@ export const getUserProfilesByTags = async (tags) => {
   try {
     // Check if Supabase is configured
     if (!isSupabaseReady) {
-      console.warn('Supabase not configured, returning empty profiles');
+      // Warning already shown by config
       return { data: [], error: null };
     }
 

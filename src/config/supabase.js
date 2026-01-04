@@ -12,8 +12,14 @@ const isSupabaseConfigured = supabaseUrl &&
   !supabaseAnonKey.includes('placeholder');
 
 if (!isSupabaseConfigured) {
-  console.warn('⚠️ Supabase not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file');
-  console.warn('   Announcements and profile comments will not work until Supabase is configured.');
+  // Only log warning once in production to reduce console noise
+  if (import.meta.env.DEV || !window.supabaseWarningShown) {
+    console.warn('⚠️ Supabase not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your Vercel environment variables');
+    console.warn('   Announcements, profile comments, and user tags will not work until Supabase is configured.');
+    if (!import.meta.env.DEV) {
+      window.supabaseWarningShown = true;
+    }
+  }
 }
 
 // Create client with empty strings if not configured (prevents errors)
