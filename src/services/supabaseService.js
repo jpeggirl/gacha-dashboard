@@ -67,7 +67,7 @@ export const addProfileComment = async (walletAddress, comment, author = 'Admin'
         }
       ])
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error('Supabase error adding comment:', error);
@@ -110,13 +110,16 @@ export const getUserProfile = async (walletAddress) => {
       return { data: null, error: null };
     }
 
+    // Use maybeSingle() instead of single() to avoid 406 errors when no record exists
     const { data, error } = await supabase
       .from('user_profiles')
       .select('*')
       .eq('wallet_address', walletAddress)
-      .single();
+      .maybeSingle();
 
-    if (error && error.code !== 'PGRST116') { // PGRST116 is "not found" - that's okay
+    if (error) {
+      // Log the error for debugging
+      console.error('Supabase query error:', error);
       throw error;
     }
     
@@ -181,7 +184,7 @@ export const addUserTag = async (walletAddress, tag, author = 'Admin') => {
         onConflict: 'wallet_address'
       })
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error('Supabase error adding tag:', error);
@@ -232,7 +235,7 @@ export const removeUserTag = async (walletAddress, tag) => {
       })
       .eq('wallet_address', walletAddress)
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error('Supabase error removing tag:', error);
@@ -278,7 +281,7 @@ export const updateUserProfile = async (walletAddress, updates, author = 'Admin'
         onConflict: 'wallet_address'
       })
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error('Supabase error updating profile:', error);

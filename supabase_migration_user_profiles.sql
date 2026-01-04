@@ -22,8 +22,13 @@ CREATE INDEX IF NOT EXISTS idx_user_profiles_tags ON user_profiles USING GIN(tag
 ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
 
 -- Create policy to allow all operations (adjust based on your security needs)
+-- Drop existing policy if it exists to avoid conflicts
+DROP POLICY IF EXISTS "Allow all operations on user_profiles" ON user_profiles;
+
 CREATE POLICY "Allow all operations on user_profiles" ON user_profiles
-  FOR ALL USING (true) WITH CHECK (true);
+  FOR ALL 
+  USING (true) 
+  WITH CHECK (true);
 
 -- Function to automatically update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_user_profiles_updated_at()
