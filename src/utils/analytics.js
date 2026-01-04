@@ -56,21 +56,29 @@ export const processAnalytics = (data, lifetimeTotalSpent = null) => {
   // 3. Prepare Trend Data (Group transactions by Date)
   const dailySpend = {};
   transactions.forEach(tx => {
-    const dateKey = new Date(tx.loggedAt).toLocaleDateString('en-US', { 
+    const txDate = new Date(tx.loggedAt);
+    const dateKey = txDate.toLocaleDateString('en-US', { 
       month: 'short', 
       day: 'numeric' 
     });
-    dailySpend[dateKey] = (dailySpend[dateKey] || 0) + tx.packAmount;
+    // Store both the display date and the actual date for proper sorting across year boundaries
+    if (!dailySpend[dateKey]) {
+      dailySpend[dateKey] = { amount: 0, actualDate: txDate };
+    }
+    dailySpend[dateKey].amount += tx.packAmount;
+    // Keep the earliest date for this dateKey to ensure consistent sorting
+    if (txDate < dailySpend[dateKey].actualDate) {
+      dailySpend[dateKey].actualDate = txDate;
+    }
   });
 
-  // Convert date strings to sortable format and sort
+  // Convert to array and sort by actual date
   const chartData = Object.entries(dailySpend)
-    .map(([date, amount]) => {
-      // Parse the date string (e.g., "Jan 15") to a proper date for sorting
-      const currentYear = new Date().getFullYear();
-      const parsedDate = new Date(`${date}, ${currentYear}`);
-      return { date, amount, sortDate: parsedDate };
-    })
+    .map(([date, data]) => ({
+      date,
+      amount: data.amount,
+      sortDate: data.actualDate
+    }))
     .sort((a, b) => a.sortDate - b.sortDate)
     .map(({ date, amount }) => ({ date, amount }));
 
