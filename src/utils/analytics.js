@@ -62,10 +62,13 @@ export const processAnalytics = (data, lifetimeTotalSpent = null) => {
       day: 'numeric' 
     });
     // Store both the display date and the actual date for proper sorting across year boundaries
+    // Use tx.amount (new API) with fallback to tx.packAmount (legacy)
+    const txAmount = tx.amount ?? tx.packAmount ?? 0;
     if (!dailySpend[dateKey]) {
-      dailySpend[dateKey] = { amount: 0, actualDate: txDate };
+      dailySpend[dateKey] = { amount: 0, winnings: 0, actualDate: txDate };
     }
-    dailySpend[dateKey].amount += tx.packAmount;
+    dailySpend[dateKey].amount += txAmount;
+    dailySpend[dateKey].winnings += tx.totalWinnings || 0;
     // Keep the earliest date for this dateKey to ensure consistent sorting
     if (txDate < dailySpend[dateKey].actualDate) {
       dailySpend[dateKey].actualDate = txDate;
@@ -77,10 +80,11 @@ export const processAnalytics = (data, lifetimeTotalSpent = null) => {
     .map(([date, data]) => ({
       date,
       amount: data.amount,
+      winnings: data.winnings,
       sortDate: data.actualDate
     }))
     .sort((a, b) => a.sortDate - b.sortDate)
-    .map(({ date, amount }) => ({ date, amount }));
+    .map(({ date, amount, winnings }) => ({ date, amount, winnings }));
 
   // 4. Identify Tier (based on lifetime spending)
   let tier = USER_TIERS.FREE_TO_PLAY.name;
@@ -107,12 +111,20 @@ export const processAnalytics = (data, lifetimeTotalSpent = null) => {
     return dateB - dateA; // Newest first
   });
 
+  // Calculate total winnings and RTP from data or transactions
+  const totalWinnings = data.totalWinnings || transactions.reduce((sum, tx) => sum + (tx.totalWinnings || 0), 0);
+  const rtp = data.rtp || (totalSpent > 0 ? (totalWinnings / totalSpent) * 100 : 0);
+  const netWinnings = totalWinnings - totalSpent;
+
   return {
     wallet,
     username,
     totalSpent,
     totalPacks,
     avgOrderValue,
+    totalWinnings,
+    netWinnings,
+    rtp,
     pieData,
     chartData,
     tier,

@@ -1,4 +1,24 @@
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+
+const CustomTooltip = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    const spent = payload.find(p => p.dataKey === 'amount')?.value || 0;
+    const winnings = payload.find(p => p.dataKey === 'winnings')?.value || 0;
+    const net = winnings - spent;
+    
+    return (
+      <div className="bg-white p-3 rounded-lg shadow-lg border border-slate-200">
+        <p className="font-semibold text-slate-900 mb-2">{label}</p>
+        <p className="text-sm text-indigo-600">Spent: ${spent.toLocaleString()}</p>
+        <p className="text-sm text-emerald-600">Winnings: ${winnings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+        <p className={`text-sm font-semibold ${net >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+          Net: {net >= 0 ? '+' : ''}${net.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </p>
+      </div>
+    );
+  }
+  return null;
+};
 
 const ActivityChart = ({ chartData }) => {
   return (
@@ -22,19 +42,24 @@ const ActivityChart = ({ chartData }) => {
               axisLine={false} 
               tickFormatter={(value) => `$${value}`} 
             />
-            <Tooltip 
-              cursor={{ fill: '#f8fafc' }}
-              contentStyle={{ 
-                borderRadius: '8px', 
-                border: 'none', 
-                boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' 
-              }} 
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
+            <Legend 
+              wrapperStyle={{ paddingTop: '10px' }}
+              formatter={(value) => value === 'amount' ? 'Spent' : 'Winnings'}
             />
             <Bar 
               dataKey="amount" 
+              name="Spent"
               fill="#6366f1" 
               radius={[4, 4, 0, 0]} 
-              barSize={40} 
+              barSize={30} 
+            />
+            <Bar 
+              dataKey="winnings" 
+              name="Winnings"
+              fill="#10b981" 
+              radius={[4, 4, 0, 0]} 
+              barSize={30} 
             />
           </BarChart>
         </ResponsiveContainer>

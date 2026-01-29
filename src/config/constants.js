@@ -34,12 +34,13 @@ export const API_CONFIG = {
   TIMEOUT: 10000 // milliseconds (10 seconds)
 };
 
-// Pack Definitions
+// Pack Definitions - Note: Pack names and prices now come from the API
+// These are kept as fallbacks for legacy data only
 export const PACK_DEFINITIONS = [
-  { name: '$30 Starter Pack', price: 30 },
-  { name: '$150 Great Pack', price: 150 },
-  { name: '$250 Rocket Pack', price: 250 },
-  { name: '$10 Gem Sack', price: 10 }
+  { name: 'Pokémon Master Pack', price: 250 },
+  { name: 'Starter Pack', price: 30 },
+  { name: 'Great Pack', price: 150 },
+  { name: 'Gem Sack', price: 10 }
 ];
 
 // Chart Colors

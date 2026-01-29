@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { DollarSign, Package, TrendingUp, CheckCircle2, LogOut } from 'lucide-react';
+import { DollarSign, Package, TrendingUp, Trophy, Wallet } from 'lucide-react';
 
 // Services
 import { fetchPackPurchases } from './services/api';
@@ -221,33 +221,37 @@ function App() {
     }
 
     // Recalculate totals and breakdown from filtered transactions
-    const totalSpent = filteredTransactions.reduce((sum, tx) => sum + tx.packAmount, 0);
+    // Use tx.amount (new API) with fallback to tx.packAmount (legacy)
+    const totalSpent = filteredTransactions.reduce((sum, tx) => sum + (tx.amount ?? tx.packAmount ?? 0), 0);
+    const totalWinnings = filteredTransactions.reduce((sum, tx) => sum + (tx.totalWinnings || 0), 0);
     const totalPacks = filteredTransactions.length;
     
     // Recalculate pack breakdown from filtered transactions
     const breakdownMap = {};
     filteredTransactions.forEach(tx => {
-      // Find the pack name from the original breakdown
-      const packInfo = data.packBreakdown.find(p => p.packAmount === tx.packAmount);
-      if (packInfo) {
-        const packName = packInfo.packName;
-        if (!breakdownMap[packName]) {
-          breakdownMap[packName] = {
-            packName: packName,
-            packAmount: tx.packAmount,
-            count: 0,
-            totalSpent: 0
-          };
-        }
-        breakdownMap[packName].count += 1;
-        breakdownMap[packName].totalSpent += tx.packAmount;
+      // Use tx.packName directly (new API) or find from breakdown (legacy)
+      const txAmount = tx.amount ?? tx.packAmount ?? 0;
+      const packName = tx.packName || data.packBreakdown.find(p => p.packAmount === txAmount)?.packName || 'Unknown Pack';
+      
+      if (!breakdownMap[packName]) {
+        breakdownMap[packName] = {
+          packName: packName,
+          packAmount: txAmount,
+          count: 0,
+          totalSpent: 0,
+          totalWinnings: 0
+        };
       }
+      breakdownMap[packName].count += 1;
+      breakdownMap[packName].totalSpent += txAmount;
+      breakdownMap[packName].totalWinnings += tx.totalWinnings || 0;
     });
 
     return {
       ...data,
       transactions: filteredTransactions,
       totalSpent,
+      totalWinnings,
       totalPacks,
       packBreakdown: Object.values(breakdownMap),
       // Preserve free packs data (not filtered by time frame)
@@ -348,12 +352,24 @@ function App() {
               <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-6">
                 <div>
                   {/* KPI Cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
                     <KPICard 
                       title="Total Spent" 
                       value={`$${stats.totalSpent.toLocaleString()}`} 
-                      subtext={timeFrame === 'all' ? 'Lifetime Revenue' : timeFrame === '7d' ? 'Last 7 Days' : 'Last 30 Days'}
+                      subtext={timeFrame === 'all' ? 'Lifetime' : timeFrame === '7d' ? 'Last 7 Days' : 'Last 30 Days'}
                       icon={DollarSign}
+                    />
+                    <KPICard 
+                      title="Total Winnings" 
+                      value={`$${stats.totalWinnings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} 
+                      subtext={`RTP: ${stats.rtp.toFixed(1)}%`}
+                      icon={Trophy}
+                    />
+                    <KPICard 
+                      title="Net Winnings" 
+                      value={`${stats.netWinnings >= 0 ? '+' : ''}$${stats.netWinnings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} 
+                      subtext={stats.netWinnings >= 0 ? 'Profit' : 'Loss'}
+                      icon={Wallet}
                     />
                     <KPICard 
                       title="Packs Purchased" 
@@ -366,12 +382,6 @@ function App() {
                       value={`$${stats.avgOrderValue.toFixed(0)}`} 
                       subtext="Per Transaction"
                       icon={TrendingUp}
-                    />
-                    <KPICard 
-                      title="Top Purchase" 
-                      value={stats.pieData[0]?.name || 'N/A'} 
-                      subtext={`${stats.pieData[0]?.count || 0} times`}
-                      icon={CheckCircle2}
                     />
                   </div>
 
