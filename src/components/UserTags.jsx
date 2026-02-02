@@ -123,7 +123,7 @@ const UserTags = ({ walletAddress, onTagsUpdate }) => {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 min-w-0">
       <div className="flex items-center gap-2 mb-4">
         <Tag className="text-indigo-600" size={20} />
         <h3 className="text-lg font-bold text-slate-900">User Tags</h3>
@@ -165,7 +165,7 @@ const UserTags = ({ walletAddress, onTagsUpdate }) => {
             <button
               onClick={() => setShowDropdown(!showDropdown)}
               disabled={adding}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium w-full sm:w-auto justify-center sm:justify-start"
             >
               {adding ? (
                 <>
@@ -181,7 +181,7 @@ const UserTags = ({ walletAddress, onTagsUpdate }) => {
             </button>
 
             {showDropdown && !adding && (
-              <div className="absolute top-full left-0 mt-2 w-64 bg-white border border-slate-200 rounded-lg shadow-lg z-10">
+              <div className="absolute top-full left-0 mt-2 w-full sm:w-64 bg-white border border-slate-200 rounded-lg shadow-lg z-10">
                 <div className="p-2 max-h-48 overflow-y-auto">
                   {unassignedTags.length > 0 ? (
                     <>

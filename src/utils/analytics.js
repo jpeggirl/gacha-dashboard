@@ -1,4 +1,4 @@
-import { USER_TIERS, TRANSACTION_LIMIT } from '../config/constants';
+import { PACK_PRICING, USER_TIERS } from '../config/constants';
 
 /**
  * Processes raw wallet data into analytics stats
@@ -45,12 +45,22 @@ export const processAnalytics = (data, lifetimeTotalSpent = null) => {
   const tierCalculationTotal = lifetimeTotalSpent !== null ? lifetimeTotalSpent : totalSpent;
 
   // 2. Prepare Pie Data (Top packs by spend)
+  const normalizePackName = (name = '') => name.toLowerCase().replace(/\s+/g, ' ').trim();
+  const getPackPrice = (name, fallbackAmount) => {
+    const normalizedName = normalizePackName(name);
+    if (PACK_PRICING[normalizedName] !== undefined) {
+      return PACK_PRICING[normalizedName];
+    }
+    return fallbackAmount ?? null;
+  };
+
   const pieData = packBreakdown
     .sort((a, b) => b.totalSpent - a.totalSpent)
     .map(item => ({
       name: item.packName,
       value: item.totalSpent, // Chart by Revenue
-      count: item.count
+      count: item.count,
+      packPrice: getPackPrice(item.packName, item.packAmount)
     }));
 
   // 3. Prepare Trend Data (Group transactions by Date)
@@ -129,7 +139,7 @@ export const processAnalytics = (data, lifetimeTotalSpent = null) => {
     chartData,
     tier,
     priceToNameMap,
-    transactions: transactions.slice(0, TRANSACTION_LIMIT), // Show last N
+    transactions,
     totalFreePacksRedeemed: totalFreePacksRedeemed || 0,
     freePacks: sortedFreePacks
   };

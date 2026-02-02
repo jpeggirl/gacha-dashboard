@@ -5,7 +5,7 @@ import { getUserTags } from '../services/supabaseService';
 import TagBadge from './TagBadge';
 
 const Leaderboard = ({ onNavigateToWallet }) => {
-  const [leaderboardType, setLeaderboardType] = useState('total'); // 'total' or 'weekly'
+  const [leaderboardType, setLeaderboardType] = useState('weekly'); // 'total' or 'weekly'
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -130,19 +130,8 @@ const Leaderboard = ({ onNavigateToWallet }) => {
           </button>
         </div>
         
-        {/* Toggle between Total and Weekly */}
+        {/* Toggle between Weekly and All Time */}
         <div className="flex gap-2">
-          <button
-            onClick={() => setLeaderboardType('total')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
-              leaderboardType === 'total'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            <Calendar size={16} />
-            All Time
-          </button>
           <button
             onClick={() => setLeaderboardType('weekly')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
@@ -153,6 +142,17 @@ const Leaderboard = ({ onNavigateToWallet }) => {
           >
             <Calendar size={16} />
             Weekly
+          </button>
+          <button
+            onClick={() => setLeaderboardType('total')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+              leaderboardType === 'total'
+                ? 'bg-indigo-600 text-white shadow-md'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            <Calendar size={16} />
+            All Time
           </button>
         </div>
       </div>

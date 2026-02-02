@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { MessageSquare, Send, Plus, Search, Activity, Wallet } from 'lucide-react';
+import { MessageSquare, Send, Plus, Search, Activity, Wallet, DollarSign, Trophy, Package } from 'lucide-react';
 import { getAnnouncementsFeed } from '../services/supabaseService';
 import { supabase, isSupabaseReady } from '../config/supabase';
 import Leaderboard from './Leaderboard';
-import Summary from './Summary';
+import KPICard from './KPICard';
+
+const SUMMARY_API_URL = 'https://api-pull.gacha.game/api/report/dd3b02be-f916-4857-8103-e263d01c3248';
 
 const HomePage = ({ onNavigateToWallet }) => {
   // Create a wrapper function that accepts wallet address
@@ -15,9 +17,17 @@ const HomePage = ({ onNavigateToWallet }) => {
   const [feedItems, setFeedItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryError, setSummaryError] = useState(null);
+  const [summaryStats, setSummaryStats] = useState({
+    totalPurchaseAmount: 0,
+    totalWinnings: 0,
+    totalCount: 0
+  });
 
   useEffect(() => {
     loadFeed();
+    loadSummary();
     
     // Only set up real-time subscription if Supabase is configured
     if (isSupabaseReady) {
@@ -42,6 +52,29 @@ const HomePage = ({ onNavigateToWallet }) => {
       };
     }
   }, []);
+
+  const loadSummary = async () => {
+    setSummaryLoading(true);
+    setSummaryError(null);
+    try {
+      const response = await fetch(SUMMARY_API_URL);
+      if (!response.ok) {
+        throw new Error(`Summary fetch failed: ${response.status}`);
+      }
+      const data = await response.json();
+      const overall = data?.overall || {};
+      setSummaryStats({
+        totalPurchaseAmount: overall.totalPurchaseAmount ?? 0,
+        totalWinnings: overall.totalWinnings ?? 0,
+        totalCount: overall.totalCount ?? 0
+      });
+    } catch (err) {
+      console.error(err);
+      setSummaryError('Failed to load summary stats.');
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
 
   const loadFeed = async () => {
     setLoading(true);
@@ -81,9 +114,37 @@ const HomePage = ({ onNavigateToWallet }) => {
           </div>
         </div>
 
-        {/* Summary Section */}
-        <div className="mb-8">
-          <Summary />
+        {/* Summary KPI Cards */}
+        <div className="flex flex-wrap gap-4 mb-8">
+          <KPICard
+            title="Total Purchase"
+            value={
+              summaryLoading
+                ? 'Loading...'
+                : `$${summaryStats.totalPurchaseAmount.toLocaleString()}`
+            }
+            subtext={summaryError ? summaryError : 'All Time'}
+            icon={DollarSign}
+          />
+          <KPICard
+            title="Total Winnings"
+            value={
+              summaryLoading
+                ? 'Loading...'
+                : `$${summaryStats.totalWinnings.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                  })}`
+            }
+            subtext={summaryError ? summaryError : 'All Time'}
+            icon={Trophy}
+          />
+          <KPICard
+            title="Total Packs Sold"
+            value={summaryLoading ? 'Loading...' : summaryStats.totalCount.toLocaleString()}
+            subtext={summaryError ? summaryError : 'All Time'}
+            icon={Package}
+          />
         </div>
 
         {/* Leaderboard + Live Feed layout */}

@@ -1,8 +1,11 @@
-import React from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { ArrowUpRight, Gift } from 'lucide-react';
 import { TRANSACTION_LIMIT } from '../config/constants';
 
-const TransactionTable = ({ transactions, priceToNameMap, freePacks = [] }) => {
+const TransactionTable = ({ transactions = [], priceToNameMap, freePacks = [] }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+
   // Create a Set of free pack transaction hashes for exact matching
   // freePacks array contains objects with txHash from freePackRedemptions
   const freePackTxHashes = new Set();
@@ -43,14 +46,75 @@ const TransactionTable = ({ transactions, priceToNameMap, freePacks = [] }) => {
     
     return false;
   };
+
+  const filteredTransactions = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) {
+      return transactions;
+    }
+    return transactions.filter((tx) => (tx.txHash || '').toLowerCase().includes(query));
+  }, [transactions, searchTerm]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredTransactions.length / TRANSACTION_LIMIT));
+  const safePage = Math.min(currentPage, totalPages);
+  const startIndex = (safePage - 1) * TRANSACTION_LIMIT;
+  const endIndex = startIndex + TRANSACTION_LIMIT;
+  const pagedTransactions = filteredTransactions.slice(startIndex, endIndex);
+
+  useEffect(() => {
+    if (safePage !== currentPage) {
+      setCurrentPage(safePage);
+    }
+  }, [safePage, currentPage]);
+
+  const handleSearchChange = (event) => {
+    setSearchTerm(event.target.value);
+    setCurrentPage(1);
+  };
+
+  const showingStart = filteredTransactions.length === 0 ? 0 : startIndex + 1;
+  const showingEnd = Math.min(endIndex, filteredTransactions.length);
+
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-        <h3 className="text-lg font-bold text-slate-900">Transaction Logs</h3>
-        <div className="flex gap-2">
-          <span className="text-xs text-slate-500 self-center">
-            Showing last {TRANSACTION_LIMIT} entries
+      <div className="p-6 border-b border-slate-100 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between bg-slate-50/50">
+        <div>
+          <h3 className="text-lg font-bold text-slate-900">Transaction Logs</h3>
+          <span className="text-xs text-slate-500">
+            Showing {showingStart}-{showingEnd} of {filteredTransactions.length} entries
           </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={handleSearchChange}
+              placeholder="Search by TxHash"
+              className="w-56 sm:w-72 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+            />
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              disabled={safePage === 1}
+              className="rounded border border-slate-200 px-2 py-1 font-semibold text-slate-600 hover:border-indigo-300 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Prev
+            </button>
+            <span>
+              Page {safePage} of {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+              disabled={safePage === totalPages}
+              className="rounded border border-slate-200 px-2 py-1 font-semibold text-slate-600 hover:border-indigo-300 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
       <div className="overflow-x-auto">
@@ -67,7 +131,7 @@ const TransactionTable = ({ transactions, priceToNameMap, freePacks = [] }) => {
             </tr>
           </thead>
           <tbody className="block md:table-row-group md:divide-y md:divide-slate-100">
-            {transactions.map((tx) => {
+            {pagedTransactions.map((tx) => {
               const amount = getTxAmount(tx);
               const winnings = tx.totalWinnings || 0;
               const net = winnings - amount;
@@ -165,6 +229,13 @@ const TransactionTable = ({ transactions, priceToNameMap, freePacks = [] }) => {
                 </tr>
               );
             })}
+            {pagedTransactions.length === 0 && (
+              <tr className="block md:table-row">
+                <td className="px-6 py-6 text-center text-slate-500 md:table-cell" colSpan={7}>
+                  No transactions found.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

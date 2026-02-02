@@ -3,6 +3,21 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { PieChart as PieIcon } from 'lucide-react';
 import { CHART_COLORS } from '../config/constants';
 
+const CustomTooltip = ({ active, payload }) => {
+  if (!active || !payload || !payload.length) return null;
+  const { name, packPrice } = payload[0]?.payload || {};
+  const formattedPrice = packPrice === null || packPrice === undefined
+    ? '—'
+    : `$${packPrice.toLocaleString()}`;
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
+      <div className="text-xs font-semibold text-slate-500">{name}</div>
+      <div className="text-sm font-medium text-slate-900">Price: {formattedPrice}</div>
+    </div>
+  );
+};
+
 const SpendingMixChart = ({ pieData }) => {
   return (
     <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
@@ -26,7 +41,7 @@ const SpendingMixChart = ({ pieData }) => {
                 <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
               ))}
             </Pie>
-            <Tooltip formatter={(value) => `$${value}`} />
+            <Tooltip content={<CustomTooltip />} />
           </PieChart>
         </ResponsiveContainer>
         {/* Center Text Overlay */}

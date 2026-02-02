@@ -9,17 +9,17 @@ const TIME_FRAMES = [
 
 const TimeFrameFilter = ({ selectedTimeFrame, onTimeFrameChange }) => {
   return (
-    <div className="flex items-center gap-3 mb-6">
+    <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
       <div className="flex items-center gap-2 text-slate-600">
         <Calendar size={18} />
         <span className="text-sm font-medium">Time Frame:</span>
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {TIME_FRAMES.map((frame) => (
           <button
             key={frame.value}
             onClick={() => onTimeFrameChange(frame.value)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+            className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-all ${
               selectedTimeFrame === frame.value
                 ? 'bg-indigo-600 text-white shadow-md'
                 : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 hover:border-indigo-300'

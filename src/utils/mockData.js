@@ -2,10 +2,13 @@ import { PACK_DEFINITIONS } from '../config/constants';
 
 // Mock pack definitions with collections
 const MOCK_PACKS = [
+  { name: 'Pokémon Welcome pack', price: 0, collection: 'pokemon' },
+  { name: 'Pokémon Starter Pack', price: 25, collection: 'pokemon' },
+  { name: 'Pokémon Collector Pack', price: 50, collection: 'pokemon' },
+  { name: 'Pokémon Elite Pack', price: 100, collection: 'pokemon' },
   { name: 'Pokémon Master Pack', price: 250, collection: 'pokemon' },
-  { name: 'Starter Pack', price: 30, collection: 'starter' },
-  { name: 'Great Pack', price: 150, collection: 'premium' },
-  { name: 'Gem Sack', price: 10, collection: 'gems' }
+  { name: 'One Piece starter pack', price: 50, collection: 'one-piece' },
+  { name: 'One piece manga pack', price: 250, collection: 'one-piece' }
 ];
 
 /**
