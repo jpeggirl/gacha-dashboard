@@ -80,6 +80,10 @@ export const DEFAULT_WALLET = '0xfc006b59d81504832cfa4f3d40be17224663d4e9';
 // Transaction Limits
 export const TRANSACTION_LIMIT = 50;
 
+// Pagination Defaults (matching API defaults)
+export const DEFAULT_TRANSACTIONS_LIMIT = 20;
+export const DEFAULT_INVENTORY_LIMIT = 20;
+
 // Default User Tags
 export const DEFAULT_TAGS = [
   'abstract farmer',

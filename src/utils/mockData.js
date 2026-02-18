@@ -103,16 +103,57 @@ export const generateMockData = (wallet) => {
   // Calculate overall RTP
   const rtp = totalSpent > 0 ? parseFloat(((totalWinnings / totalSpent) * 100).toFixed(2)) : 0;
 
+  // Generate mock inventory wins
+  const inventoryWinsData = [];
+  const tiers = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
+  const tierColors = { common: '#9ca3af', uncommon: '#22c55e', rare: '#3b82f6', epic: '#a855f7', legendary: '#f59e0b' };
+  const grades = ['PSA 9', 'PSA 10', 'BGS 9.5', 'CGC 9', 'Raw'];
+  const sets = ['Base Set', 'Jungle', 'Fossil', 'Team Rocket', 'Gym Heroes'];
+
+  for (let i = 0; i < 12; i++) {
+    const tier = tiers[Math.floor(Math.random() * tiers.length)];
+    const tierMultiplier = { common: 1, uncommon: 2, rare: 5, epic: 15, legendary: 50 }[tier];
+    const value = parseFloat((tierMultiplier * (5 + Math.random() * 20)).toFixed(2));
+
+    inventoryWinsData.push({
+      id: `inv-${i}`,
+      tier,
+      details: {
+        name: `Mock Card #${i + 1}`,
+        img: `https://placehold.co/200x280/1e293b/e2e8f0?text=Card+${i + 1}`,
+        year: 1999 + Math.floor(Math.random() * 26),
+        grade: grades[Math.floor(Math.random() * grades.length)],
+        set: sets[Math.floor(Math.random() * sets.length)],
+      },
+      value,
+      variety: Math.random() < 0.3 ? 'Holo' : undefined,
+    });
+  }
+
   // Return data matching new API structure
   return {
     wallet: wallet,
     username: null,
+    email: null,
     totalPacks: totalPacks,
     totalSpent: totalSpent,
     totalWinnings: parseFloat(totalWinnings.toFixed(2)),
     rtp: rtp,
     packBreakdown: Object.values(breakdownMap),
-    transactions: transactions,
+    transactions: {
+      data: transactions,
+      page: 1,
+      limit: 20,
+      total: transactions.length,
+      totalPages: Math.ceil(transactions.length / 20),
+    },
+    inventoryWins: {
+      data: inventoryWinsData,
+      page: 1,
+      limit: 20,
+      total: inventoryWinsData.length,
+      totalPages: 1,
+    },
     freePackRedemptions: freePackRedemptions,
     totalFreePacksRedeemed: freePackRedemptions.length
   };

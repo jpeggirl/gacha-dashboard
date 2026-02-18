@@ -6,6 +6,7 @@ import { fetchPackPurchases } from './services/api';
 import { fetchLeaderboard } from './services/leaderboardApi';
 import { generateMockData } from './utils/mockData';
 import { processAnalytics } from './utils/analytics';
+import { extractTransactions } from './utils/normalizeResponse';
 
 // Components
 import Header from './components/Header';
@@ -14,6 +15,7 @@ import UserProfile from './components/UserProfile';
 import SpendingMixChart from './components/SpendingMixChart';
 import ActivityChart from './components/ActivityChart';
 import TransactionTable from './components/TransactionTable';
+import InventoryGrid from './components/InventoryGrid';
 import LoadingOverlay from './components/LoadingOverlay';
 import ErrorMessage from './components/ErrorMessage';
 import MockDataBanner from './components/MockDataBanner';
@@ -26,7 +28,7 @@ import FreePacksSection from './components/FreePacksSection';
 import UserTags from './components/UserTags';
 
 // Config
-import { DEFAULT_WALLET } from './config/constants';
+import { DEFAULT_WALLET, DEFAULT_TRANSACTIONS_LIMIT, DEFAULT_INVENTORY_LIMIT } from './config/constants';
 import { getCurrentUser } from './config/users';
 import { getUserTags } from './services/supabaseService';
 
@@ -36,7 +38,7 @@ function App() {
     // Check if user is already authenticated
     const authTime = sessionStorage.getItem('admin_auth_time');
     const isAuth = sessionStorage.getItem('admin_authenticated') === 'true';
-    
+
     // Check if session is still valid (8 hours)
     if (isAuth && authTime) {
       const eightHours = 8 * 60 * 60 * 1000;
@@ -68,6 +70,10 @@ function App() {
   const [leaderboardData, setLeaderboardData] = useState([]); // Top 50 leaderboard data
   const [userTags, setUserTags] = useState([]); // Tags for current user
 
+  // Pagination state
+  const [transactionsPage, setTransactionsPage] = useState(1);
+  const [inventoryPage, setInventoryPage] = useState(1);
+
   const handleLogout = () => {
     sessionStorage.removeItem('admin_authenticated');
     sessionStorage.removeItem('admin_auth_time');
@@ -81,7 +87,7 @@ function App() {
     try {
       const response = await fetchLeaderboard('total');
       let leaderboardData = [];
-      
+
       // Handle different response structures
       if (Array.isArray(response)) {
         leaderboardData = response;
@@ -92,7 +98,7 @@ function App() {
       } else if (response && response.leaderboard && Array.isArray(response.leaderboard)) {
         leaderboardData = response.leaderboard;
       }
-      
+
       // Get top 50 and ensure they have rank
       const top50 = leaderboardData
         .filter(item => item && item.wallet)
@@ -101,7 +107,7 @@ function App() {
           ...item,
           rank: item.rank || index + 1
         }));
-      
+
       setLeaderboardData(top50);
     } catch (err) {
       console.warn("Failed to fetch leaderboard:", err);
@@ -115,7 +121,7 @@ function App() {
       setUserTags([]);
       return;
     }
-    
+
     try {
       const { data, error } = await getUserTags(walletAddress);
       if (error) {
@@ -135,58 +141,77 @@ function App() {
     setUserTags(newTags);
   };
 
-  const fetchData = async (e, walletAddress = null) => {
+  const fetchData = async (e, identifierOverride = null, options = {}) => {
     if (e) e.preventDefault();
-    
-    const addressToSearch = walletAddress || searchTerm;
-    
-    if (!addressToSearch || !addressToSearch.trim()) {
-      setError("Please enter a wallet address.");
+
+    const identifier = identifierOverride || searchTerm;
+
+    if (!identifier || !identifier.trim()) {
+      setError("Please enter a wallet address, username, or email.");
       setData(null);
       return;
     }
 
     setLoading(true);
     setError(null);
-    
-    // Update searchTerm if walletAddress was provided
-    if (walletAddress) {
-      setSearchTerm(walletAddress);
+
+    // Update searchTerm if identifier was provided
+    if (identifierOverride) {
+      setSearchTerm(identifierOverride);
     }
-    
+
+    const txPage = options.transactionsPage ?? transactionsPage;
+    const invPage = options.inventoryPage ?? inventoryPage;
+
     try {
-      const jsonData = await fetchPackPurchases(addressToSearch.trim());
+      const jsonData = await fetchPackPurchases(identifier.trim(), {
+        transactionsPage: txPage,
+        transactionsLimit: DEFAULT_TRANSACTIONS_LIMIT,
+        inventoryPage: invPage,
+        inventoryLimit: DEFAULT_INVENTORY_LIMIT,
+      });
       setData(jsonData);
       setDataSource('api');
-      
+
       // Fetch leaderboard to check if user is in top 50
       await fetchLeaderboardData();
-      
+
       // Fetch user tags
-      await fetchUserTags(addressToSearch.trim());
+      await fetchUserTags(identifier.trim());
     } catch (err) {
       console.warn("API failed, using mock fallback.", {
         error: err.message,
         name: err.name,
-        wallet: addressToSearch
+        wallet: identifier
       });
       // Fallback to Mock Data matching the structure
-      const mock = generateMockData(addressToSearch.trim());
-      
+      const mock = generateMockData(identifier.trim());
+
       // Simulate network delay for better UX
       await new Promise(resolve => setTimeout(resolve, 600));
-      
+
       setData(mock);
       setDataSource('mock');
-      
+
       // Still try to fetch leaderboard even with mock data
       await fetchLeaderboardData();
-      
+
       // Fetch user tags
-      await fetchUserTags(addressToSearch.trim());
+      await fetchUserTags(identifier.trim());
     } finally {
       setLoading(false);
     }
+  };
+
+  // Page change handlers
+  const handleTransactionsPageChange = (page) => {
+    setTransactionsPage(page);
+    fetchData(null, null, { transactionsPage: page, inventoryPage });
+  };
+
+  const handleInventoryPageChange = (page) => {
+    setInventoryPage(page);
+    fetchData(null, null, { transactionsPage, inventoryPage: page });
   };
 
   // Auto-load on mount
@@ -198,69 +223,20 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Filter transactions based on selected time frame
+  // Derive analytics from data - no more client-side time frame re-filtering of transactions
+  // KPIs come from root-level totalSpent/totalWinnings/rtp; charts use packBreakdown
   const filteredData = useMemo(() => {
     if (!data) return null;
 
-    let filteredTransactions = [...data.transactions];
-
-    if (timeFrame !== 'all') {
-      const now = new Date();
-      const cutoffDate = new Date();
-      
-      if (timeFrame === '7d') {
-        cutoffDate.setDate(now.getDate() - 7);
-      } else if (timeFrame === '30d') {
-        cutoffDate.setDate(now.getDate() - 30);
-      }
-
-      filteredTransactions = data.transactions.filter(tx => {
-        const txDate = new Date(tx.loggedAt);
-        return txDate >= cutoffDate;
-      });
-    }
-
-    // Recalculate totals and breakdown from filtered transactions
-    // Use tx.amount (new API) with fallback to tx.packAmount (legacy)
-    const totalSpent = filteredTransactions.reduce((sum, tx) => sum + (tx.amount ?? tx.packAmount ?? 0), 0);
-    const totalWinnings = filteredTransactions.reduce((sum, tx) => sum + (tx.totalWinnings || 0), 0);
-    const totalPacks = filteredTransactions.length;
-    
-    // Recalculate pack breakdown from filtered transactions
-    const breakdownMap = {};
-    filteredTransactions.forEach(tx => {
-      // Use tx.packName directly (new API) or find from breakdown (legacy)
-      const txAmount = tx.amount ?? tx.packAmount ?? 0;
-      const packName = tx.packName || data.packBreakdown.find(p => p.packAmount === txAmount)?.packName || 'Unknown Pack';
-      
-      if (!breakdownMap[packName]) {
-        breakdownMap[packName] = {
-          packName: packName,
-          packAmount: txAmount,
-          count: 0,
-          totalSpent: 0,
-          totalWinnings: 0
-        };
-      }
-      breakdownMap[packName].count += 1;
-      breakdownMap[packName].totalSpent += txAmount;
-      breakdownMap[packName].totalWinnings += tx.totalWinnings || 0;
-    });
+    const { items: transactions } = extractTransactions(data.transactions);
 
     return {
       ...data,
-      transactions: filteredTransactions,
-      totalSpent,
-      totalWinnings,
-      totalPacks,
-      packBreakdown: Object.values(breakdownMap),
-      // Preserve free packs data (not filtered by time frame)
-      totalFreePacksRedeemed: data.totalFreePacksRedeemed,
-      freePackRedemptions: data.freePackRedemptions || []
+      transactions,
     };
-  }, [data, timeFrame]);
+  }, [data]);
 
-  // Process analytics data with filtered data
+  // Process analytics data
   // Pass original lifetime totalSpent for tier calculation
   const stats = useMemo(() => {
     if (!filteredData) return null;
@@ -286,6 +262,8 @@ function App() {
           onSearchSubmit={(e) => {
             e.preventDefault();
             setCurrentView('wallet');
+            setTransactionsPage(1);
+            setInventoryPage(1);
             fetchData(e);
           }}
           loading={loading}
@@ -295,6 +273,8 @@ function App() {
         />
         <HomePage onNavigateToWallet={(walletAddress) => {
           setCurrentView('wallet');
+          setTransactionsPage(1);
+          setInventoryPage(1);
           fetchData(null, walletAddress);
         }} />
       </div>
@@ -306,7 +286,11 @@ function App() {
       <Header
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
-        onSearchSubmit={fetchData}
+        onSearchSubmit={(e) => {
+          setTransactionsPage(1);
+          setInventoryPage(1);
+          fetchData(e);
+        }}
         loading={loading}
         onLogout={handleLogout}
         currentView={currentView}
@@ -330,6 +314,7 @@ function App() {
                 tier={stats.tier}
                 wallet={stats.wallet}
                 username={stats.username}
+                email={data?.email}
                 lastInteraction={stats.transactions[0]?.loggedAt}
                 tags={userTags}
               />
@@ -353,33 +338,33 @@ function App() {
                 <div>
                   {/* KPI Cards */}
                   <div className="flex flex-wrap gap-4 mb-8">
-                    <KPICard 
-                      title="Total Spent" 
-                      value={`$${stats.totalSpent.toLocaleString()}`} 
+                    <KPICard
+                      title="Total Spent"
+                      value={`$${stats.totalSpent.toLocaleString()}`}
                       subtext={timeFrame === 'all' ? 'Lifetime' : timeFrame === '7d' ? 'Last 7 Days' : 'Last 30 Days'}
                       icon={DollarSign}
                     />
-                    <KPICard 
-                      title="Total Winnings" 
-                      value={`$${stats.totalWinnings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} 
+                    <KPICard
+                      title="Total Winnings"
+                      value={`$${stats.totalWinnings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                       subtext={`RTP: ${stats.rtp.toFixed(1)}%`}
                       icon={Trophy}
                     />
-                    <KPICard 
-                      title="Net Winnings" 
-                      value={`${stats.netWinnings >= 0 ? '+' : ''}$${stats.netWinnings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} 
+                    <KPICard
+                      title="Net Winnings"
+                      value={`${stats.netWinnings >= 0 ? '+' : ''}$${stats.netWinnings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                       subtext={stats.netWinnings >= 0 ? 'Profit' : 'Loss'}
                       icon={Wallet}
                     />
-                    <KPICard 
-                      title="Packs Purchased" 
-                      value={stats.totalPacks} 
+                    <KPICard
+                      title="Packs Purchased"
+                      value={stats.totalPacks}
                       subtext={timeFrame === 'all' ? 'Total Volume' : timeFrame === '7d' ? 'Last 7 Days' : 'Last 30 Days'}
                       icon={Package}
                     />
-                    <KPICard 
-                      title="Avg Order Value" 
-                      value={`$${stats.avgOrderValue.toFixed(0)}`} 
+                    <KPICard
+                      title="Avg Order Value"
+                      value={`$${stats.avgOrderValue.toFixed(0)}`}
                       subtext="Per Transaction"
                       icon={TrendingUp}
                     />
@@ -396,7 +381,20 @@ function App() {
                     transactions={stats.transactions}
                     priceToNameMap={stats.priceToNameMap}
                     freePacks={stats.freePacks}
+                    pagination={stats.transactionsPagination}
+                    onPageChange={handleTransactionsPageChange}
+                    loading={loading}
                   />
+
+                  {/* Inventory Grid */}
+                  <div className="mt-8">
+                    <InventoryGrid
+                      items={stats.inventoryItems}
+                      pagination={stats.inventoryPagination}
+                      onPageChange={handleInventoryPageChange}
+                      loading={loading}
+                    />
+                  </div>
                 </div>
 
                 {/* Profile Comments Sidebar */}
@@ -415,4 +413,3 @@ function App() {
 }
 
 export default App;
-

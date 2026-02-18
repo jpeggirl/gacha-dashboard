@@ -362,3 +362,49 @@ export const getUserProfilesByTags = async (tags) => {
   }
 };
 
+/**
+ * Get untagged users from a list of wallet addresses
+ * Returns wallet addresses that either don't exist in user_profiles or have empty tags
+ * @param {string[]} walletAddresses - Array of wallet addresses to check
+ * @returns {Promise<{data: string[], error: Error|null}>} - Untagged wallet addresses
+ */
+export const getUntaggedLeaderboardUsers = async (walletAddresses) => {
+  try {
+    // Check if Supabase is configured
+    if (!isSupabaseReady) {
+      console.warn('Supabase not configured, returning all addresses as untagged');
+      return { data: walletAddresses, error: null };
+    }
+
+    if (!Array.isArray(walletAddresses) || walletAddresses.length === 0) {
+      return { data: [], error: null };
+    }
+
+    // Normalize addresses to lowercase for comparison
+    const normalizedAddresses = walletAddresses.map(addr => addr.toLowerCase());    // Fetch all profiles for the given wallet addresses
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('wallet_address, tags')
+      .in('wallet_address', walletAddresses);    if (error) throw error;
+
+    // Create a set of tagged wallet addresses (those with non-empty tags)
+    const taggedAddresses = new Set();
+    if (data) {
+      data.forEach(profile => {
+        if (Array.isArray(profile.tags) && profile.tags.length > 0) {
+          taggedAddresses.add(profile.wallet_address.toLowerCase());
+        }
+      });
+    }
+
+    // Filter to get only untagged addresses
+    const untaggedAddresses = walletAddresses.filter(addr => 
+      !taggedAddresses.has(addr.toLowerCase())
+    );
+
+    return { data: untaggedAddresses, error: null };
+  } catch (error) {
+    console.error('Error fetching untagged users:', error);
+    return { data: [], error };
+  }
+};

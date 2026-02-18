@@ -1,0 +1,8 @@
+# Browser session data (contains login credentials)
+.browser-data/
+
+# Node modules
+node_modules/
+
+# Logs
+*.log

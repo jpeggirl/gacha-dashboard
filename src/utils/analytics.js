@@ -1,4 +1,5 @@
 import { PACK_PRICING, USER_TIERS } from '../config/constants';
+import { extractTransactions, extractInventory } from './normalizeResponse';
 
 /**
  * Processes raw wallet data into analytics stats
@@ -10,7 +11,9 @@ export const processAnalytics = (data, lifetimeTotalSpent = null) => {
   if (!data) return null;
 
   // 1. Basic KPIs from root object
-  const { totalSpent, totalPacks, packBreakdown, transactions, wallet, username } = data;
+  const { totalSpent, totalPacks, packBreakdown, wallet, username } = data;
+  const { items: transactions, ...transactionsPagination } = extractTransactions(data.transactions);
+  const { items: inventoryItems, ...inventoryPagination } = extractInventory(data.inventoryWins);
   
   // Extract free packs data - API uses "freePackRedemptions" field
   const totalFreePacksRedeemed = data.totalFreePacksRedeemed || 0;
@@ -140,6 +143,9 @@ export const processAnalytics = (data, lifetimeTotalSpent = null) => {
     tier,
     priceToNameMap,
     transactions,
+    transactionsPagination,
+    inventoryItems,
+    inventoryPagination,
     totalFreePacksRedeemed: totalFreePacksRedeemed || 0,
     freePacks: sortedFreePacks
   };

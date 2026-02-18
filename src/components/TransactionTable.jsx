@@ -1,10 +1,8 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ArrowUpRight, Gift } from 'lucide-react';
-import { TRANSACTION_LIMIT } from '../config/constants';
 
-const TransactionTable = ({ transactions = [], priceToNameMap, freePacks = [] }) => {
+const TransactionTable = ({ transactions = [], priceToNameMap, freePacks = [], pagination, onPageChange, loading }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
 
   // Create a Set of free pack transaction hashes for exact matching
   // freePacks array contains objects with txHash from freePackRedemptions
@@ -32,21 +30,22 @@ const TransactionTable = ({ transactions = [], priceToNameMap, freePacks = [] })
     if (tx.isFreePack !== undefined) {
       return tx.isFreePack;
     }
-    
+
     // Primary method: Match by txHash (most accurate)
     if (tx.txHash && freePackTxHashes.has(tx.txHash.toLowerCase())) {
       return true;
     }
-    
+
     // Fallback: If amount is 0, it's likely a free pack
     // (but only if we don't have free pack data, otherwise trust the txHash matching)
     if (freePackTxHashes.size === 0 && getTxAmount(tx) === 0) {
       return true;
     }
-    
+
     return false;
   };
 
+  // Local txHash search filter (works on current page only)
   const filteredTransactions = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
     if (!query) {
@@ -55,25 +54,17 @@ const TransactionTable = ({ transactions = [], priceToNameMap, freePacks = [] })
     return transactions.filter((tx) => (tx.txHash || '').toLowerCase().includes(query));
   }, [transactions, searchTerm]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredTransactions.length / TRANSACTION_LIMIT));
-  const safePage = Math.min(currentPage, totalPages);
-  const startIndex = (safePage - 1) * TRANSACTION_LIMIT;
-  const endIndex = startIndex + TRANSACTION_LIMIT;
-  const pagedTransactions = filteredTransactions.slice(startIndex, endIndex);
+  const page = pagination?.page ?? 1;
+  const totalPages = pagination?.totalPages ?? 1;
+  const total = pagination?.total ?? transactions.length;
+  const limit = pagination?.limit ?? transactions.length;
 
-  useEffect(() => {
-    if (safePage !== currentPage) {
-      setCurrentPage(safePage);
-    }
-  }, [safePage, currentPage]);
+  const showingStart = total === 0 ? 0 : (page - 1) * limit + 1;
+  const showingEnd = Math.min(page * limit, total);
 
   const handleSearchChange = (event) => {
     setSearchTerm(event.target.value);
-    setCurrentPage(1);
   };
-
-  const showingStart = filteredTransactions.length === 0 ? 0 : startIndex + 1;
-  const showingEnd = Math.min(endIndex, filteredTransactions.length);
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -81,7 +72,7 @@ const TransactionTable = ({ transactions = [], priceToNameMap, freePacks = [] })
         <div>
           <h3 className="text-lg font-bold text-slate-900">Transaction Logs</h3>
           <span className="text-xs text-slate-500">
-            Showing {showingStart}-{showingEnd} of {filteredTransactions.length} entries
+            Showing {showingStart}-{showingEnd} of {total} entries
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -97,19 +88,19 @@ const TransactionTable = ({ transactions = [], priceToNameMap, freePacks = [] })
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <button
               type="button"
-              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-              disabled={safePage === 1}
+              onClick={() => onPageChange?.(page - 1)}
+              disabled={page <= 1 || loading}
               className="rounded border border-slate-200 px-2 py-1 font-semibold text-slate-600 hover:border-indigo-300 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Prev
             </button>
             <span>
-              Page {safePage} of {totalPages}
+              Page {page} of {totalPages}
             </span>
             <button
               type="button"
-              onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-              disabled={safePage === totalPages}
+              onClick={() => onPageChange?.(page + 1)}
+              disabled={page >= totalPages || loading}
               className="rounded border border-slate-200 px-2 py-1 font-semibold text-slate-600 hover:border-indigo-300 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Next
@@ -131,11 +122,11 @@ const TransactionTable = ({ transactions = [], priceToNameMap, freePacks = [] })
             </tr>
           </thead>
           <tbody className="block md:table-row-group md:divide-y md:divide-slate-100">
-            {pagedTransactions.map((tx) => {
+            {filteredTransactions.map((tx) => {
               const amount = getTxAmount(tx);
               const winnings = tx.totalWinnings || 0;
               const net = winnings - amount;
-              
+
               return (
                 <tr key={tx.txHash} className="group hover:bg-indigo-50/30 transition-colors border-b border-slate-100 md:border-0 block md:table-row">
                   <td className="px-6 py-3 md:py-4 block md:table-cell">
@@ -229,7 +220,7 @@ const TransactionTable = ({ transactions = [], priceToNameMap, freePacks = [] })
                 </tr>
               );
             })}
-            {pagedTransactions.length === 0 && (
+            {filteredTransactions.length === 0 && (
               <tr className="block md:table-row">
                 <td className="px-6 py-6 text-center text-slate-500 md:table-cell" colSpan={7}>
                   No transactions found.
@@ -244,4 +235,3 @@ const TransactionTable = ({ transactions = [], priceToNameMap, freePacks = [] })
 };
 
 export default TransactionTable;
-

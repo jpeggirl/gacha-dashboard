@@ -38,7 +38,7 @@ const Header = ({ searchTerm, onSearchChange, onSearchSubmit, loading, onLogout,
               type="text"
               value={searchTerm}
               onChange={(e) => onSearchChange(e.target.value)}
-              placeholder="Search Wallet Address (0x...)"
+              placeholder="Search by Wallet, Username, or Email"
               className="block w-full pl-10 pr-3 py-2 border border-slate-700 rounded-md leading-5 bg-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none focus:bg-slate-700 focus:border-indigo-500 sm:text-sm transition duration-150 ease-in-out font-mono"
             />
           </div>

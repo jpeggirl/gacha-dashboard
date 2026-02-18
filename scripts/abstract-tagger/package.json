@@ -1,0 +1,21 @@
+{
+  "name": "abstract-tagger",
+  "version": "1.0.0",
+  "description": "Automated tagging agent for Abstract Portal users",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "setup": "node index.js --setup",
+    "daemon": "node index.js --daemon"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "dotenv": "^16.3.1",
+    "node-cron": "^3.0.3",
+    "playwright": "^1.41.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

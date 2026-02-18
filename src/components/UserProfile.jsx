@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Wallet, ExternalLink } from 'lucide-react';
+import { User, Wallet, ExternalLink, Mail } from 'lucide-react';
 import TagBadge from './TagBadge';
 
 // Format Twitter username to URL
@@ -10,7 +10,7 @@ const getTwitterUrl = (username) => {
   return `https://twitter.com/${cleanUsername}`;
 };
 
-const UserProfile = ({ tier, wallet, username, lastInteraction, tags = [] }) => {
+const UserProfile = ({ tier, wallet, username, email, lastInteraction, tags = [] }) => {
   const twitterUrl = getTwitterUrl(username);
   const displayName = username || 'Anonymous';
 
@@ -49,6 +49,14 @@ const UserProfile = ({ tier, wallet, username, lastInteraction, tags = [] }) => 
               {wallet}
             </span>
           </div>
+          {email && (
+            <div className="flex items-center gap-2 text-slate-500 text-sm mt-1 min-w-0">
+              <Mail size={14} />
+              <span className="text-slate-600 break-all">
+                {email}
+              </span>
+            </div>
+          )}
         </div>
       </div>
       
