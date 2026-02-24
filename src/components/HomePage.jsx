@@ -224,6 +224,7 @@ const HomePage = ({ onNavigateToWallet }) => {
             </div>
           </div>
         </div>
+
       </div>
     </div>
   );

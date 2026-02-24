@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { DollarSign, Package, TrendingUp, Trophy, Wallet } from 'lucide-react';
 
 // Services
-import { fetchPackPurchases } from './services/api';
+import { fetchPackPurchases, fetchClaimCode } from './services/api';
 import { fetchLeaderboard } from './services/leaderboardApi';
 import { generateMockData } from './utils/mockData';
 import { processAnalytics } from './utils/analytics';
@@ -23,6 +23,7 @@ import EmptyState from './components/EmptyState';
 import TimeFrameFilter from './components/TimeFrameFilter';
 import Login from './components/Login';
 import HomePage from './components/HomePage';
+import ClaimCodeROI from './components/ClaimCodeROI';
 import ProfileComments from './components/ProfileComments';
 import FreePacksSection from './components/FreePacksSection';
 import UserTags from './components/UserTags';
@@ -141,6 +142,15 @@ function App() {
     setUserTags(newTags);
   };
 
+  // Returns true for inputs that look like claim codes (6-12 alphanumeric, not wallets/emails)
+  const looksLikeClaimCode = (input) => {
+    const trimmed = input.trim();
+    if (trimmed.startsWith('0x') || trimmed.includes('@') || trimmed.includes('.')) {
+      return false;
+    }
+    return /^[A-Za-z0-9]{6,12}$/.test(trimmed);
+  };
+
   const fetchData = async (e, identifierOverride = null, options = {}) => {
     if (e) e.preventDefault();
 
@@ -162,9 +172,59 @@ function App() {
 
     const txPage = options.transactionsPage ?? transactionsPage;
     const invPage = options.inventoryPage ?? inventoryPage;
+    const trimmedIdentifier = identifier.trim();
 
+    // Try claim code resolution first if the input looks like one
+    if (looksLikeClaimCode(trimmedIdentifier)) {
+      try {
+        const claimResult = await fetchClaimCode(trimmedIdentifier);
+
+        if (claimResult.exists && claimResult.claim?.redeemWallet) {
+          // Redeemed code — resolve to the redeemer's wallet
+          const wallet = claimResult.claim.redeemWallet;
+          setSearchTerm(wallet);
+          try {
+            const jsonData = await fetchPackPurchases(wallet, {
+              transactionsPage: txPage,
+              transactionsLimit: DEFAULT_TRANSACTIONS_LIMIT,
+              inventoryPage: invPage,
+              inventoryLimit: DEFAULT_INVENTORY_LIMIT,
+            });
+            setData(jsonData);
+            setDataSource('api');
+            await fetchLeaderboardData();
+            await fetchUserTags(wallet);
+          } catch (err) {
+            console.warn("API failed for resolved wallet, using mock fallback.", { error: err.message, wallet });
+            const mock = generateMockData(wallet);
+            await new Promise(resolve => setTimeout(resolve, 600));
+            setData(mock);
+            setDataSource('mock');
+            await fetchLeaderboardData();
+            await fetchUserTags(wallet);
+          }
+          setLoading(false);
+          return;
+        }
+
+        if (claimResult.exists && !claimResult.claim) {
+          // Code exists but hasn't been redeemed yet
+          setError(`Claim code "${trimmedIdentifier.toUpperCase()}" exists but hasn't been redeemed yet.`);
+          setData(null);
+          setLoading(false);
+          return;
+        }
+
+        // exists: false — code not found, fall through to normal search
+      } catch (err) {
+        // Claim code lookup failed entirely — fall through to normal search
+        console.warn("Claim code lookup failed, falling through to normal search.", { error: err.message });
+      }
+    }
+
+    // Normal wallet/username/email search
     try {
-      const jsonData = await fetchPackPurchases(identifier.trim(), {
+      const jsonData = await fetchPackPurchases(trimmedIdentifier, {
         transactionsPage: txPage,
         transactionsLimit: DEFAULT_TRANSACTIONS_LIMIT,
         inventoryPage: invPage,
@@ -177,7 +237,7 @@ function App() {
       await fetchLeaderboardData();
 
       // Fetch user tags
-      await fetchUserTags(identifier.trim());
+      await fetchUserTags(trimmedIdentifier);
     } catch (err) {
       console.warn("API failed, using mock fallback.", {
         error: err.message,
@@ -185,7 +245,7 @@ function App() {
         wallet: identifier
       });
       // Fallback to Mock Data matching the structure
-      const mock = generateMockData(identifier.trim());
+      const mock = generateMockData(trimmedIdentifier);
 
       // Simulate network delay for better UX
       await new Promise(resolve => setTimeout(resolve, 600));
@@ -197,7 +257,7 @@ function App() {
       await fetchLeaderboardData();
 
       // Fetch user tags
-      await fetchUserTags(identifier.trim());
+      await fetchUserTags(trimmedIdentifier);
     } finally {
       setLoading(false);
     }
@@ -270,13 +330,51 @@ function App() {
           onLogout={handleLogout}
           currentView={currentView}
           onNavigateHome={() => setCurrentView('home')}
+          onNavigateToClaimCodes={() => setCurrentView('claim-codes')}
         />
-        <HomePage onNavigateToWallet={(walletAddress) => {
-          setCurrentView('wallet');
-          setTransactionsPage(1);
-          setInventoryPage(1);
-          fetchData(null, walletAddress);
-        }} />
+        <HomePage
+          onNavigateToWallet={(walletAddress) => {
+            setCurrentView('wallet');
+            setTransactionsPage(1);
+            setInventoryPage(1);
+            fetchData(null, walletAddress);
+          }}
+        />
+      </div>
+    );
+  }
+
+  // Show claim code ROI page
+  if (currentView === 'claim-codes') {
+    return (
+      <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
+        <Header
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          onSearchSubmit={(e) => {
+            e.preventDefault();
+            setCurrentView('wallet');
+            setTransactionsPage(1);
+            setInventoryPage(1);
+            fetchData(e);
+          }}
+          loading={loading}
+          onLogout={handleLogout}
+          currentView={currentView}
+          onNavigateHome={() => setCurrentView('home')}
+          onNavigateToClaimCodes={() => setCurrentView('claim-codes')}
+          currentUser={currentUser}
+        />
+        <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <ClaimCodeROI
+            onNavigateToWallet={(walletAddress) => {
+              setCurrentView('wallet');
+              setTransactionsPage(1);
+              setInventoryPage(1);
+              fetchData(null, walletAddress);
+            }}
+          />
+        </main>
       </div>
     );
   }
@@ -295,6 +393,7 @@ function App() {
         onLogout={handleLogout}
         currentView={currentView}
         onNavigateHome={() => setCurrentView('home')}
+        onNavigateToClaimCodes={() => setCurrentView('claim-codes')}
         currentUser={currentUser}
       />
 
