@@ -23,18 +23,46 @@ export const fetchPackPurchases = async (identifier, paginationOptions = {}) => 
     inventoryLimit = DEFAULT_INVENTORY_LIMIT,
   } = paginationOptions;
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
-
-  try {
+  const buildUrl = (txPage, txLimit, invPage, invLimit) => {
     const params = new URLSearchParams({
-      transactionsPage: String(transactionsPage),
-      transactionsLimit: String(transactionsLimit),
-      inventoryPage: String(inventoryPage),
-      inventoryLimit: String(inventoryLimit),
+      transactionsPage: String(txPage),
+      transactionsLimit: String(txLimit),
+      inventoryPage: String(invPage),
+      inventoryLimit: String(invLimit),
     });
 
-    const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.PACK_PURCHASES}/${encodeURIComponent(identifier)}?${params}`;
+    return `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.PACK_PURCHASES}/${encodeURIComponent(identifier)}?${params}`;
+  };
+
+  const fetchPage = async (txPage, txLimit, invPage, invLimit) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
+
+    try {
+      const url = buildUrl(txPage, txLimit, invPage, invLimit);
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: API_CONFIG.HEADERS,
+        signal: controller.signal,
+        mode: 'cors'
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unable to read error response');
+        console.error('[API Debug] Error response body:', errorText);
+        throw new Error(`API Error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  };
+
+  try {
+    const url = buildUrl(transactionsPage, transactionsLimit, inventoryPage, inventoryLimit);
 
     console.log('[API Debug] Fetching from URL:', url);
     console.log('[API Debug] Headers:', {
@@ -48,28 +76,7 @@ export const fetchPackPurchases = async (identifier, paginationOptions = {}) => 
     });
     console.log('[API Debug] Timeout:', API_CONFIG.TIMEOUT, 'ms');
 
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: API_CONFIG.HEADERS,
-      signal: controller.signal,
-      mode: 'cors' // Explicitly set CORS mode
-    });
-
-    clearTimeout(timeoutId);
-
-    console.log('[API Debug] Response status:', response.status, response.statusText);
-    console.log('[API Debug] Response headers:', {
-      'content-type': response.headers.get('content-type'),
-      'access-control-allow-origin': response.headers.get('access-control-allow-origin')
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => 'Unable to read error response');
-      console.error('[API Debug] Error response body:', errorText);
-      throw new Error(`API Error: ${response.status} ${response.statusText}`);
-    }
-
-    const data = await response.json();
+    const data = await fetchPage(transactionsPage, transactionsLimit, inventoryPage, inventoryLimit);
     console.log('[API Debug] Success! Received data with keys:', Object.keys(data));
     console.log('[API Debug] Free packs data:', {
       totalFreePacksRedeemed: data.totalFreePacksRedeemed,
@@ -78,10 +85,48 @@ export const fetchPackPurchases = async (identifier, paginationOptions = {}) => 
       freePackRedemptionsLength: Array.isArray(data.freePackRedemptions) ? data.freePackRedemptions.length : 'not array',
       freePackRedemptionsSample: Array.isArray(data.freePackRedemptions) ? data.freePackRedemptions.slice(0, 2) : null
     });
+
+    // Aggregate all transaction pages so UI/export can always use the complete history.
+    if (data.transactions && !Array.isArray(data.transactions) && Array.isArray(data.transactions.data)) {
+      const firstPageItems = data.transactions.data;
+      const totalPages = Number(data.transactions.totalPages) || 1;
+      const totalItems = Number(data.transactions.total);
+      const allTransactions = [...firstPageItems];
+
+      // Fallback for inconsistent pagination metadata.
+      const shouldScanUntilEmpty = totalPages <= 1 && Number.isNaN(totalItems);
+      const maxPages = shouldScanUntilEmpty ? 50 : totalPages;
+
+      for (let page = 2; page <= maxPages; page++) {
+        const pageData = await fetchPage(page, transactionsLimit, inventoryPage, inventoryLimit);
+        const pageTransactions = pageData?.transactions?.data;
+
+        if (!Array.isArray(pageTransactions) || pageTransactions.length === 0) {
+          if (shouldScanUntilEmpty) {
+            break;
+          }
+          continue;
+        }
+
+        allTransactions.push(...pageTransactions);
+
+        if (shouldScanUntilEmpty && pageTransactions.length < transactionsLimit) {
+          break;
+        }
+      }
+
+      data.transactions = {
+        ...data.transactions,
+        data: allTransactions,
+        page: 1,
+        total: Number.isNaN(totalItems) ? allTransactions.length : totalItems,
+        totalPages: 1,
+        limit: allTransactions.length
+      };
+    }
+
     return data;
   } catch (error) {
-    clearTimeout(timeoutId);
-
     if (error.name === 'AbortError') {
       throw new Error('Request timeout - please try again');
     }

@@ -1,8 +1,10 @@
-import React, { useMemo, useState } from 'react';
-import { ArrowUpRight, Gift } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ArrowUpRight, Download, Gift } from 'lucide-react';
 
-const TransactionTable = ({ transactions = [], priceToNameMap, freePacks = [], pagination, onPageChange, loading }) => {
+const TransactionTable = ({ transactions = [], priceToNameMap, freePacks = [], loading }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 20;
 
   // Create a Set of free pack transaction hashes for exact matching
   // freePacks array contains objects with txHash from freePackRedemptions
@@ -54,16 +56,81 @@ const TransactionTable = ({ transactions = [], priceToNameMap, freePacks = [], p
     return transactions.filter((tx) => (tx.txHash || '').toLowerCase().includes(query));
   }, [transactions, searchTerm]);
 
-  const page = pagination?.page ?? 1;
-  const totalPages = pagination?.totalPages ?? 1;
-  const total = pagination?.total ?? transactions.length;
-  const limit = pagination?.limit ?? transactions.length;
+  const total = transactions.length;
+  const filteredCount = filteredTransactions.length;
+  const totalPages = Math.max(1, Math.ceil(filteredCount / PAGE_SIZE));
+  const pageStartIndex = (page - 1) * PAGE_SIZE;
+  const paginatedTransactions = filteredTransactions.slice(pageStartIndex, pageStartIndex + PAGE_SIZE);
 
-  const showingStart = total === 0 ? 0 : (page - 1) * limit + 1;
-  const showingEnd = Math.min(page * limit, total);
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, transactions]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
 
   const handleSearchChange = (event) => {
     setSearchTerm(event.target.value);
+  };
+
+  const downloadFile = (content, extension, mimeType) => {
+    const date = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    const fileName = `transaction-logs-${date}.${extension}`;
+    const blob = new Blob([content], { type: `${mimeType};charset=utf-8;` });
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = href;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(href);
+  };
+
+  const handleExportJson = () => {
+    const exportRows = transactions.map((tx) => {
+      const amount = getTxAmount(tx);
+      const winnings = tx.totalWinnings || 0;
+      return {
+        date: tx.loggedAt,
+        packName: getPackName(tx),
+        collection: tx.collection || '',
+        txHash: tx.txHash || '',
+        spent: amount,
+        winnings,
+        net: winnings - amount,
+        isFreePack: isFreePack(tx)
+      };
+    });
+
+    downloadFile(JSON.stringify(exportRows, null, 2), 'json', 'application/json');
+  };
+
+  const handleExportCsv = () => {
+    const headers = ['Date', 'Pack Name', 'Collection', 'TxHash', 'Spent', 'Winnings', 'Net', 'Free Pack'];
+    const escapeCsv = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+
+    const rows = transactions.map((tx) => {
+      const amount = getTxAmount(tx);
+      const winnings = tx.totalWinnings || 0;
+      const net = winnings - amount;
+      return [
+        tx.loggedAt || '',
+        getPackName(tx),
+        tx.collection || '',
+        tx.txHash || '',
+        amount,
+        winnings.toFixed(2),
+        net.toFixed(2),
+        isFreePack(tx) ? 'Yes' : 'No'
+      ];
+    });
+
+    const csv = [headers, ...rows].map((row) => row.map(escapeCsv).join(',')).join('\n');
+    downloadFile(csv, 'csv', 'text/csv');
   };
 
   return (
@@ -72,10 +139,32 @@ const TransactionTable = ({ transactions = [], priceToNameMap, freePacks = [], p
         <div>
           <h3 className="text-lg font-bold text-slate-900">Transaction Logs</h3>
           <span className="text-xs text-slate-500">
-            Showing {showingStart}-{showingEnd} of {total} entries
+            {filteredCount === 0
+              ? 'Showing 0 entries'
+              : `Showing ${pageStartIndex + 1}-${Math.min(pageStartIndex + PAGE_SIZE, filteredCount)} of ${filteredCount} entries`}
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleExportJson}
+              disabled={total === 0 || loading}
+              className="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:border-indigo-300 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Download size={14} />
+              Export JSON
+            </button>
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              disabled={total === 0 || loading}
+              className="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:border-indigo-300 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Download size={14} />
+              Export CSV
+            </button>
+          </div>
           <div className="relative">
             <input
               type="text"
@@ -88,8 +177,8 @@ const TransactionTable = ({ transactions = [], priceToNameMap, freePacks = [], p
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <button
               type="button"
-              onClick={() => onPageChange?.(page - 1)}
-              disabled={page <= 1 || loading}
+              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              disabled={page <= 1 || loading || filteredCount === 0}
               className="rounded border border-slate-200 px-2 py-1 font-semibold text-slate-600 hover:border-indigo-300 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Prev
@@ -99,8 +188,8 @@ const TransactionTable = ({ transactions = [], priceToNameMap, freePacks = [], p
             </span>
             <button
               type="button"
-              onClick={() => onPageChange?.(page + 1)}
-              disabled={page >= totalPages || loading}
+              onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={page >= totalPages || loading || filteredCount === 0}
               className="rounded border border-slate-200 px-2 py-1 font-semibold text-slate-600 hover:border-indigo-300 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Next
@@ -122,7 +211,7 @@ const TransactionTable = ({ transactions = [], priceToNameMap, freePacks = [], p
             </tr>
           </thead>
           <tbody className="block md:table-row-group md:divide-y md:divide-slate-100">
-            {filteredTransactions.map((tx) => {
+            {paginatedTransactions.map((tx) => {
               const amount = getTxAmount(tx);
               const winnings = tx.totalWinnings || 0;
               const net = winnings - amount;
@@ -220,7 +309,7 @@ const TransactionTable = ({ transactions = [], priceToNameMap, freePacks = [], p
                 </tr>
               );
             })}
-            {filteredTransactions.length === 0 && (
+            {paginatedTransactions.length === 0 && (
               <tr className="block md:table-row">
                 <td className="px-6 py-6 text-center text-slate-500 md:table-cell" colSpan={7}>
                   No transactions found.

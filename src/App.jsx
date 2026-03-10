@@ -72,7 +72,6 @@ function App() {
   const [userTags, setUserTags] = useState([]); // Tags for current user
 
   // Pagination state
-  const [transactionsPage, setTransactionsPage] = useState(1);
   const [inventoryPage, setInventoryPage] = useState(1);
 
   const handleLogout = () => {
@@ -170,7 +169,6 @@ function App() {
       setSearchTerm(identifierOverride);
     }
 
-    const txPage = options.transactionsPage ?? transactionsPage;
     const invPage = options.inventoryPage ?? inventoryPage;
     const trimmedIdentifier = identifier.trim();
 
@@ -185,7 +183,7 @@ function App() {
           setSearchTerm(wallet);
           try {
             const jsonData = await fetchPackPurchases(wallet, {
-              transactionsPage: txPage,
+              transactionsPage: 1,
               transactionsLimit: DEFAULT_TRANSACTIONS_LIMIT,
               inventoryPage: invPage,
               inventoryLimit: DEFAULT_INVENTORY_LIMIT,
@@ -225,7 +223,7 @@ function App() {
     // Normal wallet/username/email search
     try {
       const jsonData = await fetchPackPurchases(trimmedIdentifier, {
-        transactionsPage: txPage,
+        transactionsPage: 1,
         transactionsLimit: DEFAULT_TRANSACTIONS_LIMIT,
         inventoryPage: invPage,
         inventoryLimit: DEFAULT_INVENTORY_LIMIT,
@@ -264,14 +262,9 @@ function App() {
   };
 
   // Page change handlers
-  const handleTransactionsPageChange = (page) => {
-    setTransactionsPage(page);
-    fetchData(null, null, { transactionsPage: page, inventoryPage });
-  };
-
   const handleInventoryPageChange = (page) => {
     setInventoryPage(page);
-    fetchData(null, null, { transactionsPage, inventoryPage: page });
+    fetchData(null, null, { inventoryPage: page });
   };
 
   // Auto-load on mount
@@ -322,7 +315,6 @@ function App() {
           onSearchSubmit={(e) => {
             e.preventDefault();
             setCurrentView('wallet');
-            setTransactionsPage(1);
             setInventoryPage(1);
             fetchData(e);
           }}
@@ -335,7 +327,6 @@ function App() {
         <HomePage
           onNavigateToWallet={(walletAddress) => {
             setCurrentView('wallet');
-            setTransactionsPage(1);
             setInventoryPage(1);
             fetchData(null, walletAddress);
           }}
@@ -354,7 +345,6 @@ function App() {
           onSearchSubmit={(e) => {
             e.preventDefault();
             setCurrentView('wallet');
-            setTransactionsPage(1);
             setInventoryPage(1);
             fetchData(e);
           }}
@@ -369,7 +359,6 @@ function App() {
           <ClaimCodeROI
             onNavigateToWallet={(walletAddress) => {
               setCurrentView('wallet');
-              setTransactionsPage(1);
               setInventoryPage(1);
               fetchData(null, walletAddress);
             }}
@@ -385,7 +374,6 @@ function App() {
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
         onSearchSubmit={(e) => {
-          setTransactionsPage(1);
           setInventoryPage(1);
           fetchData(e);
         }}
@@ -480,8 +468,6 @@ function App() {
                     transactions={stats.transactions}
                     priceToNameMap={stats.priceToNameMap}
                     freePacks={stats.freePacks}
-                    pagination={stats.transactionsPagination}
-                    onPageChange={handleTransactionsPageChange}
                     loading={loading}
                   />
 
