@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Users, Download, ChevronUp, ChevronDown, Search } from 'lucide-react';
+import { Users, Download, ChevronUp, ChevronDown, Filter } from 'lucide-react';
 import { fetchAcquisitionFunnel } from '../services/posthogApi';
 
 const SortIcon = ({ column, sortConfig }) => {
@@ -15,7 +15,8 @@ const AcquisitionFunnelTable = () => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [sourceFilter, setSourceFilter] = useState('all');
+  const [mediumFilter, setMediumFilter] = useState('all');
   const [sortConfig, setSortConfig] = useState({ key: 'total_revenue', direction: 'desc' });
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 15;
@@ -29,7 +30,8 @@ const AcquisitionFunnelTable = () => {
     setError(null);
     try {
       const rows = await fetchAcquisitionFunnel();
-      setData(rows);
+      // Filter out rows where source is "unknown"
+      setData(rows.filter(row => row.utm_source !== 'unknown'));
     } catch (err) {
       console.error('[AcquisitionFunnel]', err);
       setError(err.message);
@@ -46,17 +48,17 @@ const AcquisitionFunnelTable = () => {
     setPage(1);
   };
 
+  // Unique values for dropdown filters
+  const sourceOptions = useMemo(() => [...new Set(data.map(r => r.utm_source))].sort(), [data]);
+  const mediumOptions = useMemo(() => [...new Set(data.map(r => r.utm_medium))].sort(), [data]);
+
   const filtered = useMemo(() => {
-    const q = searchTerm.trim().toLowerCase();
-    if (!q) return data;
-    return data.filter(row =>
-      row.utm_source?.toLowerCase().includes(q) ||
-      row.utm_medium?.toLowerCase().includes(q) ||
-      row.utm_campaign?.toLowerCase().includes(q) ||
-      row.referring_domain?.toLowerCase().includes(q) ||
-      row.country?.toLowerCase().includes(q)
-    );
-  }, [data, searchTerm]);
+    return data.filter(row => {
+      if (sourceFilter !== 'all' && row.utm_source !== sourceFilter) return false;
+      if (mediumFilter !== 'all' && row.utm_medium !== mediumFilter) return false;
+      return true;
+    });
+  }, [data, sourceFilter, mediumFilter]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -124,16 +126,25 @@ const AcquisitionFunnelTable = () => {
               <p className="text-slate-500 text-sm">New paying users by acquisition channel (since Feb 2026)</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Filter rows..."
-                value={searchTerm}
-                onChange={e => { setSearchTerm(e.target.value); setPage(1); }}
-                className="pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-48"
-              />
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-1.5">
+              <Filter size={14} className="text-slate-400" />
+              <select
+                value={sourceFilter}
+                onChange={e => { setSourceFilter(e.target.value); setPage(1); }}
+                className="px-2 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+              >
+                <option value="all">All Sources</option>
+                {sourceOptions.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <select
+                value={mediumFilter}
+                onChange={e => { setMediumFilter(e.target.value); setPage(1); }}
+                className="px-2 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+              >
+                <option value="all">All Mediums</option>
+                {mediumOptions.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
             </div>
             <button
               onClick={exportCSV}
