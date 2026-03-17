@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Users, Download, ChevronUp, ChevronDown, Filter } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Users, Download, ChevronUp, ChevronDown, Filter, Wallet } from 'lucide-react';
 import { fetchAcquisitionFunnel } from '../services/posthogApi';
 
 const SortIcon = ({ column, sortConfig }) => {
@@ -11,7 +11,51 @@ const SortIcon = ({ column, sortConfig }) => {
     : <ChevronDown size={14} className="text-indigo-600" />;
 };
 
-const AcquisitionFunnelTable = () => {
+const WalletDropdown = ({ wallets, onNavigateToWallet }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  if (!wallets || wallets.length === 0) return <span>0</span>;
+
+  return (
+    <div className="relative inline-block" ref={ref}>
+      <button
+        onClick={() => setOpen(prev => !prev)}
+        className="text-indigo-600 hover:text-indigo-800 font-medium underline decoration-dotted underline-offset-2 cursor-pointer"
+      >
+        {wallets.length.toLocaleString()}
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[280px] max-h-[240px] overflow-y-auto">
+          <div className="px-3 py-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wide border-b border-slate-100">
+            {wallets.length} wallet{wallets.length !== 1 ? 's' : ''}
+          </div>
+          {wallets.map((w, i) => (
+            <button
+              key={i}
+              onClick={() => { onNavigateToWallet(w); setOpen(false); }}
+              className="w-full text-left px-3 py-2 text-sm font-mono text-indigo-600 hover:bg-indigo-50 flex items-center gap-2 transition-colors"
+            >
+              <Wallet size={12} className="text-slate-400 shrink-0" />
+              <span className="truncate">{w}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -112,7 +156,7 @@ const AcquisitionFunnelTable = () => {
     { key: 'country', label: 'Country' },
     { key: 'unique_buyers', label: 'Buyers', numeric: true },
     { key: 'total_purchases', label: 'Purchases', numeric: true },
-    { key: 'total_revenue', label: 'Revenue', numeric: true }
+    { key: 'total_revenue', label: 'Purchase', numeric: true }
   ];
 
   return (
@@ -210,7 +254,9 @@ const AcquisitionFunnelTable = () => {
                     </td>
                     <td className="px-4 py-3 text-slate-700">{row.referring_domain}</td>
                     <td className="px-4 py-3 text-slate-700">{row.country}</td>
-                    <td className="px-4 py-3 text-right font-medium text-slate-900">{row.unique_buyers?.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right font-medium text-slate-900">
+                      <WalletDropdown wallets={row.wallets} onNavigateToWallet={onNavigateToWallet} />
+                    </td>
                     <td className="px-4 py-3 text-right font-medium text-slate-900">{row.total_purchases?.toLocaleString()}</td>
                     <td className="px-4 py-3 text-right font-semibold text-emerald-700">${row.total_revenue?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   </tr>

@@ -150,7 +150,7 @@ const HomePage = ({ onNavigateToWallet }) => {
 
         {/* Acquisition Funnel Table */}
         <div className="mb-8">
-          <AcquisitionFunnelTable />
+          <AcquisitionFunnelTable onNavigateToWallet={handleNavigateToWallet} />
         </div>
 
         {/* Leaderboard + Live Feed layout */}

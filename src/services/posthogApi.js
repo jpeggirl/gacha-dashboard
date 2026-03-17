@@ -36,7 +36,8 @@ SELECT
   coalesce(nullIf(ft.country, ''), 'unknown') AS country,
   count() AS unique_buyers,
   sum(pw.total_purchases) AS total_purchases,
-  round(sum(pw.total_spent), 2) AS total_revenue
+  round(sum(pw.total_spent), 2) AS total_revenue,
+  groupArray(pw.wallet) AS wallets
 FROM paying_wallets pw
 LEFT JOIN first_touch ft ON pw.wallet = ft.wallet
 GROUP BY utm_source, utm_medium, utm_campaign, referring_domain, country
