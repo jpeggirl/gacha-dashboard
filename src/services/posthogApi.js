@@ -34,6 +34,7 @@ SELECT
   coalesce(nullIf(ft.utm_campaign, ''), 'unknown') AS utm_campaign,
   coalesce(nullIf(ft.referring_domain, ''), 'direct') AS referring_domain,
   coalesce(nullIf(ft.country, ''), 'unknown') AS country,
+  min(pw.first_purchase_at) AS first_seen,
   count() AS unique_buyers,
   sum(pw.total_purchases) AS total_purchases,
   round(sum(pw.total_spent), 2) AS total_revenue,

@@ -61,7 +61,7 @@ const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
   const [error, setError] = useState(null);
   const [sourceFilter, setSourceFilter] = useState('all');
   const [mediumFilter, setMediumFilter] = useState('all');
-  const [sortConfig, setSortConfig] = useState({ key: 'total_revenue', direction: 'desc' });
+  const [sortConfig, setSortConfig] = useState({ key: 'first_seen', direction: 'desc' });
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 15;
 
@@ -109,6 +109,11 @@ const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
     arr.sort((a, b) => {
       const aVal = a[sortConfig.key];
       const bVal = b[sortConfig.key];
+      if (sortConfig.key === 'first_seen') {
+        const aTime = aVal ? new Date(aVal).getTime() : 0;
+        const bTime = bVal ? new Date(bVal).getTime() : 0;
+        return sortConfig.direction === 'asc' ? aTime - bTime : bTime - aTime;
+      }
       if (typeof aVal === 'number' && typeof bVal === 'number') {
         return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
       }
@@ -131,7 +136,7 @@ const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
   }), [filtered]);
 
   const exportCSV = () => {
-    const headers = ['utm_source', 'utm_medium', 'utm_campaign', 'referring_domain', 'country', 'unique_buyers', 'total_purchases', 'total_revenue'];
+    const headers = ['first_seen', 'utm_source', 'utm_medium', 'utm_campaign', 'referring_domain', 'country', 'unique_buyers', 'total_purchases', 'total_revenue'];
     const csvRows = [headers.join(',')];
     sorted.forEach(row => {
       csvRows.push(headers.map(h => {
@@ -148,7 +153,16 @@ const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
     URL.revokeObjectURL(url);
   };
 
+  const formatDate = (val) => {
+    if (!val) return '—';
+    const d = new Date(val);
+    if (isNaN(d)) return '—';
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      + ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  };
+
   const columns = [
+    { key: 'first_seen', label: 'First Seen' },
     { key: 'utm_source', label: 'Source' },
     { key: 'utm_medium', label: 'Medium' },
     { key: 'utm_campaign', label: 'Campaign' },
@@ -247,6 +261,7 @@ const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
               <tbody>
                 {pageData.map((row, i) => (
                   <tr key={i} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3 text-slate-500 whitespace-nowrap text-xs">{formatDate(row.first_seen)}</td>
                     <td className="px-4 py-3 text-slate-700">{row.utm_source}</td>
                     <td className="px-4 py-3 text-slate-700">{row.utm_medium}</td>
                     <td className="px-4 py-3 text-slate-700 max-w-[200px] truncate" title={row.utm_campaign}>
@@ -264,7 +279,7 @@ const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
               </tbody>
               <tfoot>
                 <tr className="bg-slate-50 border-t-2 border-slate-200">
-                  <td colSpan={5} className="px-4 py-3 font-semibold text-slate-700">
+                  <td colSpan={6} className="px-4 py-3 font-semibold text-slate-700">
                     Totals ({filtered.length} rows)
                   </td>
                   <td className="px-4 py-3 text-right font-bold text-slate-900">{totals.unique_buyers.toLocaleString()}</td>
