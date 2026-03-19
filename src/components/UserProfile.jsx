@@ -1,6 +1,7 @@
 import React from 'react';
 import { User, Wallet, ExternalLink, Mail } from 'lucide-react';
 import TagBadge from './TagBadge';
+import ArchetypeBadge from './ArchetypeBadge';
 
 // Format Twitter username to URL
 const getTwitterUrl = (username) => {
@@ -10,7 +11,7 @@ const getTwitterUrl = (username) => {
   return `https://twitter.com/${cleanUsername}`;
 };
 
-const UserProfile = ({ tier, wallet, username, email, lastInteraction, tags = [] }) => {
+const UserProfile = ({ tier, wallet, username, email, lastInteraction, tags = [], archetype }) => {
   const twitterUrl = getTwitterUrl(username);
   const displayName = username || 'Anonymous';
 
@@ -38,6 +39,14 @@ const UserProfile = ({ tier, wallet, username, email, lastInteraction, tags = []
               <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 break-words">
                 {displayName}
               </h2>
+            )}
+            {archetype && archetype.archetype && archetype.archetype !== 'unclassified' && (
+              <ArchetypeBadge
+                archetype={archetype.archetype}
+                status={archetype.status}
+                isOverride={archetype.override}
+                size="small"
+              />
             )}
             {tags && tags.length > 0 && tags.map((tag) => (
               <TagBadge key={tag} tag={tag} size="small" />

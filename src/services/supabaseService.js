@@ -368,6 +368,50 @@ export const getUserProfilesByTags = async (tags) => {
  * @param {string[]} walletAddresses - Array of wallet addresses to check
  * @returns {Promise<{data: string[], error: Error|null}>} - Untagged wallet addresses
  */
+// Archetype Functions
+export const getUserArchetype = async (walletAddress) => {
+  try {
+    if (!isSupabaseReady) {
+      return { data: null, error: null };
+    }
+
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('archetype, archetype_status, archetype_override, archetype_metrics, archetype_updated_at')
+      .eq('wallet_address', walletAddress)
+      .maybeSingle();
+
+    if (error) throw error;
+    return { data: data || null, error: null };
+  } catch (error) {
+    console.error('Error fetching user archetype:', error);
+    return { data: null, error };
+  }
+};
+
+export const updateUserArchetype = async (walletAddress, archetypeData, author = 'Admin') => {
+  try {
+    if (!isSupabaseReady) {
+      return { data: null, error: new Error('Supabase is not configured.') };
+    }
+
+    const updates = {
+      archetype: archetypeData.archetype,
+      archetype_status: archetypeData.status,
+      archetype_override: archetypeData.override || false,
+      archetype_metrics: archetypeData.metrics || null,
+      archetype_updated_at: new Date().toISOString(),
+    };
+
+    const { data, error } = await updateUserProfile(walletAddress, updates, author);
+    if (error) throw error;
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error updating user archetype:', error);
+    return { data: null, error };
+  }
+};
+
 export const getUntaggedLeaderboardUsers = async (walletAddresses) => {
   try {
     // Check if Supabase is configured

@@ -93,28 +93,6 @@ const HomePage = ({ onNavigateToWallet }) => {
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Welcome Section */}
-        <div className="mb-8">
-          <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-8 text-white shadow-xl">
-            <div className="flex items-center gap-4 mb-4">
-              <div className="bg-white/20 p-3 rounded-xl">
-                <Activity size={32} className="text-white" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold mb-2">Welcome to GachaAdmin Hub</h1>
-                <p className="text-indigo-100">Manage and analyze wallet purchases with ease</p>
-              </div>
-            </div>
-            <button
-              onClick={() => handleNavigateToWallet()}
-              className="mt-4 bg-white text-indigo-600 px-6 py-3 rounded-lg font-semibold hover:bg-indigo-50 transition-all flex items-center gap-2 shadow-lg hover:shadow-xl"
-            >
-              <Search size={20} />
-              Search Wallet Address
-            </button>
-          </div>
-        </div>
-
         {/* Summary KPI Cards */}
         <div className="flex flex-wrap gap-4 mb-8">
           <KPICard

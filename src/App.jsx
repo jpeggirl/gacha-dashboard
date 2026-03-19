@@ -27,11 +27,13 @@ import ClaimCodeROI from './components/ClaimCodeROI';
 import ProfileComments from './components/ProfileComments';
 import FreePacksSection from './components/FreePacksSection';
 import UserTags from './components/UserTags';
+import ArchetypeSection from './components/ArchetypeSection';
+import ArchetypeDirectory from './components/ArchetypeDirectory';
 
 // Config
 import { DEFAULT_WALLET, DEFAULT_TRANSACTIONS_LIMIT, DEFAULT_INVENTORY_LIMIT } from './config/constants';
 import { getCurrentUser } from './config/users';
-import { getUserTags } from './services/supabaseService';
+import { getUserTags, getUserArchetype } from './services/supabaseService';
 
 function App() {
   // Authentication state
@@ -70,6 +72,7 @@ function App() {
   const [currentView, setCurrentView] = useState('home'); // 'home' or 'wallet'
   const [leaderboardData, setLeaderboardData] = useState([]); // Top 50 leaderboard data
   const [userTags, setUserTags] = useState([]); // Tags for current user
+  const [userArchetype, setUserArchetype] = useState(null); // Archetype for current user
 
   // Pagination state
   const [inventoryPage, setInventoryPage] = useState(1);
@@ -136,6 +139,38 @@ function App() {
     }
   };
 
+  // Fetch user archetype for the current wallet
+  const fetchUserArchetype = async (walletAddress) => {
+    if (!walletAddress) {
+      setUserArchetype(null);
+      return;
+    }
+
+    try {
+      const { data, error } = await getUserArchetype(walletAddress);
+      if (error) {
+        console.warn("Failed to fetch user archetype:", error);
+        setUserArchetype(null);
+      } else if (data) {
+        setUserArchetype({
+          archetype: data.archetype,
+          status: data.archetype_status,
+          override: data.archetype_override,
+        });
+      } else {
+        setUserArchetype(null);
+      }
+    } catch (err) {
+      console.warn("Error fetching user archetype:", err);
+      setUserArchetype(null);
+    }
+  };
+
+  // Handle archetype update callback
+  const handleArchetypeUpdate = (archetypeData) => {
+    setUserArchetype(archetypeData);
+  };
+
   // Handle tags update callback
   const handleTagsUpdate = (newTags) => {
     setUserTags(newTags);
@@ -192,6 +227,7 @@ function App() {
             setDataSource('api');
             await fetchLeaderboardData();
             await fetchUserTags(wallet);
+            await fetchUserArchetype(wallet);
           } catch (err) {
             console.warn("API failed for resolved wallet, using mock fallback.", { error: err.message, wallet });
             const mock = generateMockData(wallet);
@@ -200,6 +236,7 @@ function App() {
             setDataSource('mock');
             await fetchLeaderboardData();
             await fetchUserTags(wallet);
+            await fetchUserArchetype(wallet);
           }
           setLoading(false);
           return;
@@ -234,8 +271,9 @@ function App() {
       // Fetch leaderboard to check if user is in top 50
       await fetchLeaderboardData();
 
-      // Fetch user tags
+      // Fetch user tags and archetype
       await fetchUserTags(trimmedIdentifier);
+      await fetchUserArchetype(trimmedIdentifier);
     } catch (err) {
       console.warn("API failed, using mock fallback.", {
         error: err.message,
@@ -254,8 +292,9 @@ function App() {
       // Still try to fetch leaderboard even with mock data
       await fetchLeaderboardData();
 
-      // Fetch user tags
+      // Fetch user tags and archetype
       await fetchUserTags(trimmedIdentifier);
+      await fetchUserArchetype(trimmedIdentifier);
     } finally {
       setLoading(false);
     }
@@ -323,6 +362,7 @@ function App() {
           currentView={currentView}
           onNavigateHome={() => setCurrentView('home')}
           onNavigateToClaimCodes={() => setCurrentView('claim-codes')}
+          onNavigateToArchetypes={() => setCurrentView('archetypes')}
         />
         <HomePage
           onNavigateToWallet={(walletAddress) => {
@@ -353,10 +393,45 @@ function App() {
           currentView={currentView}
           onNavigateHome={() => setCurrentView('home')}
           onNavigateToClaimCodes={() => setCurrentView('claim-codes')}
+          onNavigateToArchetypes={() => setCurrentView('archetypes')}
           currentUser={currentUser}
         />
         <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <ClaimCodeROI
+            onNavigateToWallet={(walletAddress) => {
+              setCurrentView('wallet');
+              setInventoryPage(1);
+              fetchData(null, walletAddress);
+            }}
+          />
+        </main>
+      </div>
+    );
+  }
+
+  // Show archetypes directory page
+  if (currentView === 'archetypes') {
+    return (
+      <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
+        <Header
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          onSearchSubmit={(e) => {
+            e.preventDefault();
+            setCurrentView('wallet');
+            setInventoryPage(1);
+            fetchData(e);
+          }}
+          loading={loading}
+          onLogout={handleLogout}
+          currentView={currentView}
+          onNavigateHome={() => setCurrentView('home')}
+          onNavigateToClaimCodes={() => setCurrentView('claim-codes')}
+          onNavigateToArchetypes={() => setCurrentView('archetypes')}
+          currentUser={currentUser}
+        />
+        <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <ArchetypeDirectory
             onNavigateToWallet={(walletAddress) => {
               setCurrentView('wallet');
               setInventoryPage(1);
@@ -382,6 +457,7 @@ function App() {
         currentView={currentView}
         onNavigateHome={() => setCurrentView('home')}
         onNavigateToClaimCodes={() => setCurrentView('claim-codes')}
+        onNavigateToArchetypes={() => setCurrentView('archetypes')}
         currentUser={currentUser}
       />
 
@@ -404,11 +480,18 @@ function App() {
                 email={data?.email}
                 lastInteraction={stats.transactions[0]?.loggedAt}
                 tags={userTags}
+                archetype={userArchetype}
               />
 
               <UserTags
                 walletAddress={stats.wallet}
                 onTagsUpdate={handleTagsUpdate}
+              />
+
+              <ArchetypeSection
+                walletAddress={stats.wallet}
+                transactions={stats.transactions}
+                onArchetypeUpdate={handleArchetypeUpdate}
               />
 
               <FreePacksSection

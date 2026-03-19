@@ -134,3 +134,50 @@ export const DEFAULT_TAGS = [
   'outside abstract'
 ];
 
+// Archetype Definitions
+export const ARCHETYPES = {
+  'binge-and-gone': {
+    id: 'binge-and-gone',
+    label: 'Binge & Gone',
+    description: '30+ purchases in one session, never returns',
+    icpLikelihood: 'low',
+    color: 'rose',
+  },
+  'binge-episodes': {
+    id: 'binge-episodes',
+    label: 'Binge Episodes',
+    description: 'Periodic big sessions with gaps between',
+    icpLikelihood: 'maybe',
+    color: 'amber',
+  },
+  'steady-periodic': {
+    id: 'steady-periodic',
+    label: 'Steady Periodic',
+    description: '31+ active days, measured pace',
+    icpLikelihood: 'high',
+    color: 'teal',
+  },
+  'unclassified': {
+    id: 'unclassified',
+    label: 'Unclassified',
+    description: 'Does not match any archetype pattern',
+    icpLikelihood: 'unknown',
+    color: 'slate',
+  },
+};
+
+// Tunable thresholds for archetype classification
+export const ARCHETYPE_THRESHOLDS = {
+  bingeAndGone: {
+    minPurchases: 30,
+  },
+  bingeEpisodes: {
+    minSessions: 2,
+    minSessionPurchases: 20,
+    minMaxGap: 7,
+  },
+  steadyPeriodic: {
+    minActiveDays: 31,
+  },
+};
+

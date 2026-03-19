@@ -35,6 +35,12 @@
 **Result:** Pass — build succeeds, conversion rate only counts wallets with loaded spend data to avoid skewing.
 **Lessons:** Conversion denominator uses walletsLoaded (wallets with fetched spend data) not redeemedCount, so the rate stays accurate while wallet data loads progressively.
 
+### 2026-03-19 — [Feature] Customer Archetype Auto-Tagging System
+**What:** Implemented behavioral archetype classification (binge-and-gone, binge-episodes, steady-periodic) with dynamic recency model, manual override, and seed script for 20 known wallets.
+**Files:** supabase_migration_archetypes.sql (new), src/utils/archetypeClassifier.js (new), src/components/ArchetypeBadge.jsx (new), src/components/ArchetypeSection.jsx (new), src/config/constants.js, src/services/supabaseService.js, src/components/UserProfile.jsx, src/App.jsx, scripts/seed-archetypes.js (new)
+**Result:** Pass — build succeeds, all 9 files created/modified.
+**Lessons:** Classification thresholds stored in constants.js for easy tuning. Recency model uses gapRatio (currentGap/avgGap) for personalized rhythm detection with 7-day grace period fallback.
+
 ### 2026-02-24 — [Feature] Flag New vs Existing Users in Claim Code ROI
 **What:** Classify claim code redeemers as "new" or "existing" based on whether they had transactions before their code redemption date. Added split KPI cards (New User Spending, Existing User Spending) and a Type badge column in the table.
 **Files:** src/components/ClaimCodeROI.jsx
