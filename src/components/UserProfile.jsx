@@ -1,5 +1,5 @@
-import React from 'react';
-import { User, Wallet, ExternalLink, Mail } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { User, Wallet, ExternalLink, Mail, Pencil, Check, X } from 'lucide-react';
 import TagBadge from './TagBadge';
 import ArchetypeBadge from './ArchetypeBadge';
 
@@ -11,9 +11,50 @@ const getTwitterUrl = (username) => {
   return `https://twitter.com/${cleanUsername}`;
 };
 
-const UserProfile = ({ tier, wallet, username, email, lastInteraction, tags = [], archetype }) => {
+const UserProfile = ({ tier, wallet, username, email, lastInteraction, tags = [], archetype, nickname, onNicknameUpdate }) => {
   const twitterUrl = getTwitterUrl(username);
-  const displayName = username || 'Anonymous';
+  const displayName = username || nickname || 'Anonymous';
+  const canEditName = !username; // Only editable when no twitter/username
+
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState(nickname || '');
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editing]);
+
+  const handleSave = async () => {
+    const trimmed = editValue.trim();
+    if (!trimmed || trimmed === nickname) {
+      setEditing(false);
+      setEditValue(nickname || '');
+      return;
+    }
+    setSaving(true);
+    try {
+      if (onNicknameUpdate) {
+        await onNicknameUpdate(trimmed);
+      }
+    } finally {
+      setSaving(false);
+      setEditing(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setEditing(false);
+    setEditValue(nickname || '');
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') handleSave();
+    if (e.key === 'Escape') handleCancel();
+  };
 
   return (
     <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 border-b border-slate-200 pb-6 min-w-0">
@@ -35,10 +76,53 @@ const UserProfile = ({ tier, wallet, username, email, lastInteraction, tags = []
                 </h2>
                 <ExternalLink size={16} className="opacity-0 group-hover:opacity-100 transition-opacity" />
               </a>
+            ) : editing ? (
+              <div className="flex items-center gap-2">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Enter name..."
+                  className="text-2xl sm:text-3xl font-bold text-slate-900 border-b-2 border-indigo-500 outline-none bg-transparent px-1 py-0 min-w-[120px]"
+                  disabled={saving}
+                />
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50"
+                  title="Save"
+                >
+                  <Check size={18} />
+                </button>
+                <button
+                  onClick={handleCancel}
+                  disabled={saving}
+                  className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
+                  title="Cancel"
+                >
+                  <X size={18} />
+                </button>
+              </div>
             ) : (
-              <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 break-words">
-                {displayName}
-              </h2>
+              <div className="flex items-center gap-2 group/name">
+                <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 break-words">
+                  {displayName}
+                </h2>
+                {canEditName && (
+                  <button
+                    onClick={() => {
+                      setEditValue(nickname || '');
+                      setEditing(true);
+                    }}
+                    className="p-1.5 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors opacity-0 group-hover/name:opacity-100"
+                    title="Edit name"
+                  >
+                    <Pencil size={16} />
+                  </button>
+                )}
+              </div>
             )}
             {archetype && archetype.archetype && archetype.archetype !== 'unclassified' && (
               <ArchetypeBadge
@@ -68,7 +152,7 @@ const UserProfile = ({ tier, wallet, username, email, lastInteraction, tags = []
           )}
         </div>
       </div>
-      
+
       <div className="flex gap-2">
         <div className="text-right hidden md:block">
           <p className="text-xs text-slate-400 uppercase font-semibold">Last Interaction</p>
@@ -82,4 +166,3 @@ const UserProfile = ({ tier, wallet, username, email, lastInteraction, tags = []
 };
 
 export default UserProfile;
-

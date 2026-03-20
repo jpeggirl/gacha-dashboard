@@ -368,6 +368,40 @@ export const getUserProfilesByTags = async (tags) => {
  * @param {string[]} walletAddresses - Array of wallet addresses to check
  * @returns {Promise<{data: string[], error: Error|null}>} - Untagged wallet addresses
  */
+// Nickname Functions
+export const updateUserNickname = async (walletAddress, nickname, author = 'Admin') => {
+  return updateUserProfile(walletAddress, { nickname }, author);
+};
+
+export const getNicknamesForWallets = async (walletAddresses) => {
+  try {
+    if (!isSupabaseReady || !walletAddresses || walletAddresses.length === 0) {
+      return { data: {}, error: null };
+    }
+
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('wallet_address, nickname')
+      .in('wallet_address', walletAddresses);
+
+    if (error) throw error;
+
+    const nicknameMap = {};
+    if (data) {
+      data.forEach(profile => {
+        if (profile.nickname) {
+          nicknameMap[profile.wallet_address.toLowerCase()] = profile.nickname;
+        }
+      });
+    }
+
+    return { data: nicknameMap, error: null };
+  } catch (error) {
+    console.error('Error fetching nicknames:', error);
+    return { data: {}, error };
+  }
+};
+
 // Archetype Functions
 export const getUserArchetype = async (walletAddress) => {
   try {

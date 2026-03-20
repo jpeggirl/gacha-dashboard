@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Trophy, Calendar, ExternalLink, RefreshCw } from 'lucide-react';
 import { fetchLeaderboard } from '../services/leaderboardApi';
-import { getUserTags } from '../services/supabaseService';
+import { getUserTags, getNicknamesForWallets } from '../services/supabaseService';
 import TagBadge from './TagBadge';
 
 const Leaderboard = ({ onNavigateToWallet }) => {
@@ -10,6 +10,7 @@ const Leaderboard = ({ onNavigateToWallet }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [userTags, setUserTags] = useState({}); // Map of wallet -> tags array
+  const [userNicknames, setUserNicknames] = useState({}); // Map of wallet -> nickname
 
   useEffect(() => {
     loadLeaderboard();
@@ -60,8 +61,9 @@ const Leaderboard = ({ onNavigateToWallet }) => {
       });
       setData(leaderboardData);
       
-      // Fetch tags for all users in the leaderboard
+      // Fetch tags and nicknames for all users in the leaderboard
       fetchTagsForUsers(leaderboardData);
+      fetchNicknamesForUsers(leaderboardData);
     } catch (err) {
       setError(err.message || 'Failed to load leaderboard');
       console.error('Error loading leaderboard:', err);
@@ -102,6 +104,20 @@ const Leaderboard = ({ onNavigateToWallet }) => {
     
     await Promise.all(tagPromises);
     setUserTags(tagsMap);
+  };
+
+  // Fetch nicknames for all users in the leaderboard
+  const fetchNicknamesForUsers = async (leaderboardData) => {
+    if (!leaderboardData || leaderboardData.length === 0) return;
+
+    const wallets = leaderboardData
+      .map(item => item.wallet || item.wallet_address)
+      .filter(Boolean);
+
+    const { data } = await getNicknamesForWallets(wallets);
+    if (data) {
+      setUserNicknames(data);
+    }
   };
 
   // Get rank emoji
@@ -179,11 +195,11 @@ const Leaderboard = ({ onNavigateToWallet }) => {
           <div className="space-y-2">
             {data.map((item) => {
               const rank = item.rank || 1;
+              const wallet = item.wallet || item.wallet_address || '';
               const twitterUrl = getTwitterUrl(item.username);
-              const displayName = item.username || 'Anonymous';
+              const displayName = item.username || (wallet && userNicknames[wallet.toLowerCase()]) || 'Anonymous';
               const totalPurchaseAmount = item.total_purchase_amount || 0;
               const totalWinValue = item.total_win_value || 0;
-              const wallet = item.wallet || item.wallet_address || '';
               
               // Calculate P&L: total spent - win amount
               const pnl = totalPurchaseAmount - totalWinValue;

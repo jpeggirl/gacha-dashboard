@@ -2,16 +2,36 @@ import React, { useState, useEffect } from 'react';
 import { Users, Loader2, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 import { supabase, isSupabaseReady } from '../config/supabase';
 import { ARCHETYPES } from '../config/constants';
+import { fetchLeaderboard } from '../services/leaderboardApi';
 import ArchetypeBadge from './ArchetypeBadge';
 
 const ArchetypeDirectory = ({ onNavigateToWallet }) => {
   const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedArchetype, setExpandedArchetype] = useState(null);
+  const [usernameMap, setUsernameMap] = useState({}); // wallet -> username
 
   useEffect(() => {
     fetchProfiles();
+    fetchUsernames();
   }, []);
+
+  const fetchUsernames = async () => {
+    try {
+      const response = await fetchLeaderboard('total');
+      const list = Array.isArray(response) ? response : response?.topRankers || response?.data || [];
+      const map = {};
+      list.forEach(item => {
+        const wallet = item.wallet || item.wallet_address;
+        if (wallet && item.username) {
+          map[wallet.toLowerCase()] = item.username;
+        }
+      });
+      setUsernameMap(map);
+    } catch (err) {
+      console.warn('Failed to fetch usernames for archetype directory:', err);
+    }
+  };
 
   const fetchProfiles = async () => {
     if (!isSupabaseReady) {
@@ -22,7 +42,7 @@ const ArchetypeDirectory = ({ onNavigateToWallet }) => {
     try {
       const { data, error } = await supabase
         .from('user_profiles')
-        .select('wallet_address, tags, archetype, archetype_status, archetype_override')
+        .select('wallet_address, tags, archetype, archetype_status, archetype_override, nickname')
         .not('archetype', 'is', null);
 
       if (error) throw error;
@@ -111,7 +131,11 @@ const ArchetypeDirectory = ({ onNavigateToWallet }) => {
               {isExpanded && users.length > 0 && (
                 <div className="border-t border-slate-100">
                   <div className="divide-y divide-slate-100">
-                    {users.map((user) => (
+                    {users.map((user) => {
+                      const twitterUsername = usernameMap[user.wallet_address.toLowerCase()];
+                      const displayName = twitterUsername || user.nickname || null;
+
+                      return (
                       <div
                         key={user.wallet_address}
                         className="flex items-center justify-between px-5 py-3 hover:bg-slate-50 transition-colors"
@@ -119,10 +143,16 @@ const ArchetypeDirectory = ({ onNavigateToWallet }) => {
                         <div className="flex items-center gap-3 min-w-0">
                           <button
                             onClick={() => onNavigateToWallet(user.wallet_address)}
-                            className="font-mono text-sm text-indigo-600 hover:text-indigo-800 hover:underline truncate"
+                            className="text-sm text-indigo-600 hover:text-indigo-800 hover:underline truncate"
                             title={user.wallet_address}
                           >
-                            {user.wallet_address}
+                            {displayName ? (
+                              <span className="font-semibold">
+                                {twitterUsername ? `@${twitterUsername.replace(/^@/, '')}` : displayName}
+                              </span>
+                            ) : (
+                              <span className="font-mono">{user.wallet_address}</span>
+                            )}
                           </button>
                           {user.archetype_override && (
                             <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-medium">
@@ -157,7 +187,8 @@ const ArchetypeDirectory = ({ onNavigateToWallet }) => {
                           </button>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}

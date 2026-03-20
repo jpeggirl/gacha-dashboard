@@ -33,7 +33,7 @@ import ArchetypeDirectory from './components/ArchetypeDirectory';
 // Config
 import { DEFAULT_WALLET, DEFAULT_TRANSACTIONS_LIMIT, DEFAULT_INVENTORY_LIMIT } from './config/constants';
 import { getCurrentUser } from './config/users';
-import { getUserTags, getUserArchetype } from './services/supabaseService';
+import { getUserTags, getUserArchetype, getUserProfile, updateUserNickname } from './services/supabaseService';
 
 function App() {
   // Authentication state
@@ -73,6 +73,7 @@ function App() {
   const [leaderboardData, setLeaderboardData] = useState([]); // Top 50 leaderboard data
   const [userTags, setUserTags] = useState([]); // Tags for current user
   const [userArchetype, setUserArchetype] = useState(null); // Archetype for current user
+  const [userNickname, setUserNickname] = useState(null); // Custom nickname for current user
 
   // Pagination state
   const [inventoryPage, setInventoryPage] = useState(1);
@@ -166,6 +167,36 @@ function App() {
     }
   };
 
+  // Fetch user nickname for the current wallet
+  const fetchUserNickname = async (walletAddress) => {
+    if (!walletAddress) {
+      setUserNickname(null);
+      return;
+    }
+
+    try {
+      const { data, error } = await getUserProfile(walletAddress);
+      if (error) {
+        console.warn("Failed to fetch user nickname:", error);
+        setUserNickname(null);
+      } else {
+        setUserNickname(data?.nickname || null);
+      }
+    } catch (err) {
+      console.warn("Error fetching user nickname:", err);
+      setUserNickname(null);
+    }
+  };
+
+  // Handle nickname update
+  const handleNicknameUpdate = async (newNickname) => {
+    if (!stats?.wallet) return;
+    const { error } = await updateUserNickname(stats.wallet, newNickname);
+    if (!error) {
+      setUserNickname(newNickname);
+    }
+  };
+
   // Handle archetype update callback
   const handleArchetypeUpdate = (archetypeData) => {
     setUserArchetype(archetypeData);
@@ -228,6 +259,7 @@ function App() {
             await fetchLeaderboardData();
             await fetchUserTags(wallet);
             await fetchUserArchetype(wallet);
+            await fetchUserNickname(wallet);
           } catch (err) {
             console.warn("API failed for resolved wallet, using mock fallback.", { error: err.message, wallet });
             const mock = generateMockData(wallet);
@@ -237,6 +269,7 @@ function App() {
             await fetchLeaderboardData();
             await fetchUserTags(wallet);
             await fetchUserArchetype(wallet);
+            await fetchUserNickname(wallet);
           }
           setLoading(false);
           return;
@@ -271,9 +304,10 @@ function App() {
       // Fetch leaderboard to check if user is in top 50
       await fetchLeaderboardData();
 
-      // Fetch user tags and archetype
+      // Fetch user tags, archetype, and nickname
       await fetchUserTags(trimmedIdentifier);
       await fetchUserArchetype(trimmedIdentifier);
+      await fetchUserNickname(trimmedIdentifier);
     } catch (err) {
       console.warn("API failed, using mock fallback.", {
         error: err.message,
@@ -292,9 +326,10 @@ function App() {
       // Still try to fetch leaderboard even with mock data
       await fetchLeaderboardData();
 
-      // Fetch user tags and archetype
+      // Fetch user tags, archetype, and nickname
       await fetchUserTags(trimmedIdentifier);
       await fetchUserArchetype(trimmedIdentifier);
+      await fetchUserNickname(trimmedIdentifier);
     } finally {
       setLoading(false);
     }
@@ -481,6 +516,8 @@ function App() {
                 lastInteraction={stats.transactions[0]?.loggedAt}
                 tags={userTags}
                 archetype={userArchetype}
+                nickname={userNickname}
+                onNicknameUpdate={handleNicknameUpdate}
               />
 
               <UserTags

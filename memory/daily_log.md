@@ -41,6 +41,12 @@
 **Result:** Pass — build succeeds, all 9 files created/modified.
 **Lessons:** Classification thresholds stored in constants.js for easy tuning. Recency model uses gapRatio (currentGap/avgGap) for personalized rhythm detection with 7-day grace period fallback.
 
+### 2026-03-20 — [Feature] Editable Nickname for Anonymous Wallets
+**What:** Added inline nickname editing on wallet detail page when user has no twitter/username (shows "Anonymous"). Nicknames persist in Supabase `user_profiles.nickname` column and display across Leaderboard and Archetype Directory.
+**Files:** src/components/UserProfile.jsx, src/App.jsx, src/services/supabaseService.js, src/components/Leaderboard.jsx, src/components/ArchetypeDirectory.jsx
+**Result:** Pass — build succeeds. Requires `nickname` TEXT column in Supabase `user_profiles` table.
+**Lessons:** Reused existing `updateUserProfile` upsert pattern. Bulk fetch with `getNicknamesForWallets` avoids N+1 queries in Leaderboard.
+
 ### 2026-02-24 — [Feature] Flag New vs Existing Users in Claim Code ROI
 **What:** Classify claim code redeemers as "new" or "existing" based on whether they had transactions before their code redemption date. Added split KPI cards (New User Spending, Existing User Spending) and a Type badge column in the table.
 **Files:** src/components/ClaimCodeROI.jsx
