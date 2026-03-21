@@ -46,6 +46,72 @@ ORDER BY total_revenue DESC
 LIMIT 500
 `.trim();
 
+const WALLET_ACQUISITION_QUERY = (wallet) => `
+SELECT
+  coalesce(nullIf(argMin(properties.$session_entry_utm_source, timestamp), ''), null) AS utm_source,
+  coalesce(nullIf(argMin(properties.$session_entry_utm_medium, timestamp), ''), null) AS utm_medium,
+  coalesce(nullIf(argMin(properties.$session_entry_utm_campaign, timestamp), ''), null) AS utm_campaign,
+  coalesce(nullIf(argMin(properties.$referring_domain, timestamp), ''), null) AS referring_domain,
+  coalesce(nullIf(argMin(properties.$geoip_country_name, timestamp), ''), null) AS country,
+  coalesce(nullIf(argMin(properties.$geoip_city_name, timestamp), ''), null) AS city
+FROM events
+WHERE timestamp >= '2026-02-01'
+  AND timestamp <= now()
+  AND lower(distinct_id) = lower('${wallet}')
+`.trim();
+
+export const fetchWalletAcquisition = async (walletAddress) => {
+  if (!POSTHOG_API_KEY || !POSTHOG_PROJECT_ID ||
+      POSTHOG_API_KEY === 'your_posthog_personal_api_key_here' ||
+      POSTHOG_PROJECT_ID === 'your_project_id_here') {
+    return null;
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const response = await fetch(POSTHOG_API_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${POSTHOG_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        query: {
+          kind: 'HogQLQuery',
+          query: WALLET_ACQUISITION_QUERY(walletAddress)
+        }
+      }),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const { columns, results } = data;
+
+    if (!results || results.length === 0) return null;
+
+    const row = results[0];
+    const obj = {};
+    columns.forEach((col, i) => {
+      obj[col] = row[i];
+    });
+
+    // Return null if no meaningful data
+    if (!obj.utm_source && !obj.utm_medium && !obj.utm_campaign && !obj.country) {
+      return null;
+    }
+
+    return obj;
+  } catch {
+    return null;
+  }
+};
+
 export const fetchAcquisitionFunnel = async () => {
   if (!POSTHOG_API_KEY || !POSTHOG_PROJECT_ID ||
       POSTHOG_API_KEY === 'your_posthog_personal_api_key_here' ||

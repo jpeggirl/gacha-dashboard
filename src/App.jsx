@@ -29,11 +29,13 @@ import FreePacksSection from './components/FreePacksSection';
 import UserTags from './components/UserTags';
 import ArchetypeSection from './components/ArchetypeSection';
 import ArchetypeDirectory from './components/ArchetypeDirectory';
+import AcquisitionInfo from './components/AcquisitionInfo';
 
 // Config
 import { DEFAULT_WALLET, DEFAULT_TRANSACTIONS_LIMIT, DEFAULT_INVENTORY_LIMIT } from './config/constants';
 import { getCurrentUser } from './config/users';
 import { getUserTags, getUserArchetype, getUserProfile, updateUserNickname } from './services/supabaseService';
+import { fetchWalletAcquisition } from './services/posthogApi';
 
 function App() {
   // Authentication state
@@ -74,6 +76,7 @@ function App() {
   const [userTags, setUserTags] = useState([]); // Tags for current user
   const [userArchetype, setUserArchetype] = useState(null); // Archetype for current user
   const [userNickname, setUserNickname] = useState(null); // Custom nickname for current user
+  const [userAcquisition, setUserAcquisition] = useState(null); // Acquisition data for current user
 
   // Pagination state
   const [inventoryPage, setInventoryPage] = useState(1);
@@ -188,6 +191,22 @@ function App() {
     }
   };
 
+  // Fetch acquisition data for the current wallet
+  const fetchUserAcquisitionData = async (walletAddress) => {
+    if (!walletAddress) {
+      setUserAcquisition(null);
+      return;
+    }
+
+    try {
+      const data = await fetchWalletAcquisition(walletAddress);
+      setUserAcquisition(data);
+    } catch (err) {
+      console.warn("Error fetching acquisition data:", err);
+      setUserAcquisition(null);
+    }
+  };
+
   // Handle nickname update
   const handleNicknameUpdate = async (newNickname) => {
     if (!stats?.wallet) return;
@@ -260,6 +279,7 @@ function App() {
             await fetchUserTags(wallet);
             await fetchUserArchetype(wallet);
             await fetchUserNickname(wallet);
+            fetchUserAcquisitionData(wallet);
           } catch (err) {
             console.warn("API failed for resolved wallet, using mock fallback.", { error: err.message, wallet });
             const mock = generateMockData(wallet);
@@ -270,6 +290,7 @@ function App() {
             await fetchUserTags(wallet);
             await fetchUserArchetype(wallet);
             await fetchUserNickname(wallet);
+            fetchUserAcquisitionData(wallet);
           }
           setLoading(false);
           return;
@@ -308,6 +329,7 @@ function App() {
       await fetchUserTags(trimmedIdentifier);
       await fetchUserArchetype(trimmedIdentifier);
       await fetchUserNickname(trimmedIdentifier);
+      fetchUserAcquisitionData(trimmedIdentifier);
     } catch (err) {
       console.warn("API failed, using mock fallback.", {
         error: err.message,
@@ -330,6 +352,7 @@ function App() {
       await fetchUserTags(trimmedIdentifier);
       await fetchUserArchetype(trimmedIdentifier);
       await fetchUserNickname(trimmedIdentifier);
+      fetchUserAcquisitionData(trimmedIdentifier);
     } finally {
       setLoading(false);
     }
@@ -519,6 +542,8 @@ function App() {
                 nickname={userNickname}
                 onNicknameUpdate={handleNicknameUpdate}
               />
+
+              <AcquisitionInfo acquisition={userAcquisition} />
 
               <UserTags
                 walletAddress={stats.wallet}
