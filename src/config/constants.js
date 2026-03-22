@@ -153,7 +153,7 @@ export const ARCHETYPES = {
   'steady-periodic': {
     id: 'steady-periodic',
     label: 'Steady Periodic',
-    description: '31+ active days, measured pace',
+    description: '14+ active days, measured pace',
     icpLikelihood: 'high',
     color: 'teal',
   },
@@ -177,7 +177,7 @@ export const ARCHETYPE_THRESHOLDS = {
     minMaxGap: 7,
   },
   steadyPeriodic: {
-    minActiveDays: 31,
+    minActiveDays: 14,
   },
 };
 

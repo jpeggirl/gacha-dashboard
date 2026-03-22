@@ -11,10 +11,10 @@ const getTwitterUrl = (username) => {
   return `https://twitter.com/${cleanUsername}`;
 };
 
-const UserProfile = ({ tier, wallet, username, email, lastInteraction, tags = [], archetype, nickname, onNicknameUpdate }) => {
+const UserProfile = ({ tier, wallet, username, email, lastInteraction, tags = [], archetype, nickname, onNicknameUpdate, dataSource }) => {
   const twitterUrl = getTwitterUrl(username);
   const displayName = username || nickname || 'Anonymous';
-  const canEditName = !username; // Only editable when no twitter/username
+  const canEditName = !username && dataSource !== 'mock'; // Only editable when no twitter/username and not mock data
 
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(nickname || '');

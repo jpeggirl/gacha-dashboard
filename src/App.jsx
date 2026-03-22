@@ -541,6 +541,7 @@ function App() {
                 archetype={userArchetype}
                 nickname={userNickname}
                 onNicknameUpdate={handleNicknameUpdate}
+                dataSource={dataSource}
               />
 
               <AcquisitionInfo acquisition={userAcquisition} />
@@ -548,12 +549,14 @@ function App() {
               <UserTags
                 walletAddress={stats.wallet}
                 onTagsUpdate={handleTagsUpdate}
+                dataSource={dataSource}
               />
 
               <ArchetypeSection
                 walletAddress={stats.wallet}
                 transactions={stats.transactions}
                 onArchetypeUpdate={handleArchetypeUpdate}
+                dataSource={dataSource}
               />
 
               <FreePacksSection
@@ -629,7 +632,7 @@ function App() {
 
                 {/* Profile Comments Sidebar */}
                 <div className="xl:sticky xl:top-24 h-fit">
-                  <ProfileComments walletAddress={stats.wallet} />
+                  <ProfileComments walletAddress={stats.wallet} dataSource={dataSource} />
                 </div>
               </div>
             </>

@@ -4,7 +4,7 @@ import { getProfileComments, addProfileComment, deleteProfileComment } from '../
 import { supabase, isSupabaseReady } from '../config/supabase';
 import { getCurrentUser } from '../config/users';
 
-const ProfileComments = ({ walletAddress }) => {
+const ProfileComments = ({ walletAddress, dataSource }) => {
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [loading, setLoading] = useState(false);
@@ -114,13 +114,13 @@ const ProfileComments = ({ walletAddress }) => {
             type="text"
             value={newComment}
             onChange={(e) => setNewComment(e.target.value)}
-            placeholder="Add a comment about this wallet..."
+            placeholder={dataSource === 'mock' ? "Comments disabled with mock data" : "Add a comment about this wallet..."}
             className="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 min-w-0"
-            disabled={submitting}
+            disabled={submitting || dataSource === 'mock'}
           />
           <button
             type="submit"
-            disabled={submitting || !newComment.trim()}
+            disabled={submitting || !newComment.trim() || dataSource === 'mock'}
             className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
           >
             {submitting ? (

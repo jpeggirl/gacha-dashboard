@@ -13,7 +13,7 @@ const ICP_LABELS = {
   unknown: { text: 'Unknown', className: 'text-slate-500 bg-slate-50' },
 };
 
-const ArchetypeSection = ({ walletAddress, transactions, onArchetypeUpdate }) => {
+const ArchetypeSection = ({ walletAddress, transactions, onArchetypeUpdate, dataSource }) => {
   const [storedArchetype, setStoredArchetype] = useState(null);
   const [computed, setComputed] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -24,15 +24,19 @@ const ArchetypeSection = ({ walletAddress, transactions, onArchetypeUpdate }) =>
   const currentUser = getCurrentUser();
   const author = currentUser?.name || 'Admin';
 
-  // Compute archetype from transactions
+  // Compute archetype from transactions (skip when using mock data)
   useEffect(() => {
+    if (dataSource === 'mock') {
+      setComputed(null);
+      return;
+    }
     if (transactions && transactions.length > 0) {
       const result = classifyUser(transactions);
       setComputed(result);
     } else {
       setComputed(null);
     }
-  }, [transactions]);
+  }, [transactions, dataSource]);
 
   // Fetch stored archetype and sync
   useEffect(() => {
@@ -52,6 +56,9 @@ const ArchetypeSection = ({ walletAddress, transactions, onArchetypeUpdate }) =>
         } else if (computed && !data) {
           // No stored data at all — save initial classification
           await saveArchetype(computed.archetype, computed.status, false, computed.metrics);
+        } else if (!computed && data && !data.archetype_override && data.archetype !== 'unclassified') {
+          // No computed result (0 real transactions or mock data) but stale auto-classification exists — reset it
+          await saveArchetype('unclassified', null, false, null);
         }
       } catch (err) {
         console.warn('Error fetching archetype:', err);

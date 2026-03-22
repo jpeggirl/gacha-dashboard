@@ -5,7 +5,7 @@ import { DEFAULT_TAGS } from '../config/constants';
 import TagBadge from './TagBadge';
 import { getCurrentUser } from '../config/users';
 
-const UserTags = ({ walletAddress, onTagsUpdate }) => {
+const UserTags = ({ walletAddress, onTagsUpdate, dataSource }) => {
   const [tags, setTags] = useState([]);
   const [availableTags, setAvailableTags] = useState(DEFAULT_TAGS);
   const [loading, setLoading] = useState(false);
@@ -151,7 +151,7 @@ const UserTags = ({ walletAddress, onTagsUpdate }) => {
                     key={tag}
                     tag={tag}
                     onRemove={handleRemoveTag}
-                    isRemovable={true}
+                    isRemovable={dataSource !== 'mock'}
                   />
                 ))}
               </div>
@@ -164,7 +164,7 @@ const UserTags = ({ walletAddress, onTagsUpdate }) => {
           <div className="relative">
             <button
               onClick={() => setShowDropdown(!showDropdown)}
-              disabled={adding}
+              disabled={adding || dataSource === 'mock'}
               className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium w-full sm:w-auto justify-center sm:justify-start"
             >
               {adding ? (

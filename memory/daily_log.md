@@ -1,5 +1,11 @@
 # Daily Log
 
+### 2026-03-22 — [Bugfix] Prevent mock data from persisting to Supabase
+**What:** When API is unreachable, mock data triggered auto-classification saving fake archetypes to Supabase. Passed `dataSource` prop from App.jsx to ArchetypeSection, UserTags, ProfileComments, and UserProfile. Skipped archetype computation on mock data, added stale archetype reset for wallets with 0 real transactions, disabled all manual write controls (tags, comments, nicknames) when using mock data.
+**Files:** src/App.jsx, src/components/ArchetypeSection.jsx, src/components/UserTags.jsx, src/components/ProfileComments.jsx, src/components/UserProfile.jsx
+**Result:** Pass — build succeeds, all write paths guarded.
+**Lessons:** The `dataSource` state existed but was only used for the banner. Always propagate data-quality signals to components that write to persistent storage.
+
 ### 2026-02-22 — [Feature] Claim Code Search in Wallet Search Bar
 **What:** Added claim code resolution to the search bar — codes resolve to redeemer wallets, unused codes show error, unknown codes fall through to normal search.
 **Files:** src/services/api.js, src/App.jsx, src/components/Header.jsx
