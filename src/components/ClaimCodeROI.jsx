@@ -253,40 +253,44 @@ const ClaimCodeROI = ({ onNavigateToWallet }) => {
     const campaignCost = redeemedCount * CLAIM_CODE_COST;
 
     const walletsSeen = new Set();
-    let totalRevenue = 0;
+    let totalPostClaimRevenue = 0;
     let convertedCount = 0;
     let newUserCount = 0;
     let newUserSpend = 0;
     let existingUserCount = 0;
     let existingUserSpend = 0;
+    let uniqueWalletCount = 0;
     redeemed.forEach((c) => {
       const w = getCodeWallet(c)?.toLowerCase();
       if (w && !walletsSeen.has(w)) {
         walletsSeen.add(w);
         const info = walletSpend[w];
         if (info && typeof info.totalSpent === 'number') {
-          totalRevenue += info.totalSpent;
-          if (info.totalSpent > CLAIM_CODE_CONVERSION_THRESHOLD) convertedCount++;
+          const postClaim = info.postClaimSpend ?? info.totalSpent;
+          totalPostClaimRevenue += postClaim;
+          if (postClaim > CLAIM_CODE_CONVERSION_THRESHOLD) convertedCount++;
           if (info.isNewUser) {
             newUserCount++;
-            newUserSpend += info.totalSpent;
+            newUserSpend += postClaim;
           } else {
             existingUserCount++;
-            existingUserSpend += info.totalSpent;
+            existingUserSpend += postClaim;
           }
         }
       }
     });
+    uniqueWalletCount = walletsSeen.size;
 
     const walletsLoaded = Array.from(walletsSeen).filter(w => {
       const info = walletSpend[w];
       return info && typeof info.totalSpent === 'number';
     }).length;
     const conversionRate = walletsLoaded > 0 ? (convertedCount / walletsLoaded) * 100 : 0;
-    const revenueContribution = totalRevenue * 0.15;
-    const netROI = campaignCost > 0 ? ((revenueContribution - campaignCost) / campaignCost) * 100 : 0;
+    const revenueContribution = totalPostClaimRevenue * 0.15;
+    const uniqueWalletCost = uniqueWalletCount * CLAIM_CODE_COST;
+    const netROI = uniqueWalletCost > 0 ? ((revenueContribution - uniqueWalletCost) / uniqueWalletCost) * 100 : 0;
 
-    return { redeemedCount, convertedCount, conversionRate, walletsLoaded, campaignCost, totalRevenue, revenueContribution, netROI, newUserCount, newUserSpend, existingUserCount, existingUserSpend };
+    return { redeemedCount, convertedCount, conversionRate, walletsLoaded, campaignCost, totalRevenue: totalPostClaimRevenue, revenueContribution, netROI, newUserCount, newUserSpend, existingUserCount, existingUserSpend, uniqueWalletCount, uniqueWalletCost };
   }, [codes, walletSpend]);
 
   // Sorted + filtered + paginated rows
@@ -315,8 +319,8 @@ const ClaimCodeROI = ({ onNavigateToWallet }) => {
         case 'spend': {
           const wa = getCodeWallet(a)?.toLowerCase();
           const wb = getCodeWallet(b)?.toLowerCase();
-          aVal = wa && walletSpend[wa]?.totalSpent != null ? walletSpend[wa].totalSpent : -1;
-          bVal = wb && walletSpend[wb]?.totalSpent != null ? walletSpend[wb].totalSpent : -1;
+          aVal = wa && walletSpend[wa]?.postClaimSpend != null ? walletSpend[wa].postClaimSpend : -1;
+          bVal = wb && walletSpend[wb]?.postClaimSpend != null ? walletSpend[wb].postClaimSpend : -1;
           return sortDir === 'asc' ? aVal - bVal : bVal - aVal;
         }
         default:
@@ -454,19 +458,19 @@ const ClaimCodeROI = ({ onNavigateToWallet }) => {
               <KPICard
                 title="Redeemer Spending"
                 value={walletFetchInProgress ? 'Loading...' : `$${kpis.totalRevenue.toLocaleString()}`}
-                subtext="Total spent by redeemers"
+                subtext={walletFetchInProgress ? 'Calculating...' : `Spent after claim by ${kpis.uniqueWalletCount} unique wallets`}
                 icon={DollarSign}
               />
               <KPICard
                 title="New User Spending"
                 value={walletFetchInProgress ? 'Loading...' : `$${kpis.newUserSpend.toLocaleString()}`}
-                subtext={walletFetchInProgress ? 'Calculating...' : `${kpis.newUserCount} new user${kpis.newUserCount !== 1 ? 's' : ''}`}
+                subtext={walletFetchInProgress ? 'Calculating...' : `${kpis.newUserCount} new user${kpis.newUserCount !== 1 ? 's' : ''} (post-claim)`}
                 icon={UserPlus}
               />
               <KPICard
                 title="Existing User Spending"
                 value={walletFetchInProgress ? 'Loading...' : `$${kpis.existingUserSpend.toLocaleString()}`}
-                subtext={walletFetchInProgress ? 'Calculating...' : `${kpis.existingUserCount} existing user${kpis.existingUserCount !== 1 ? 's' : ''}`}
+                subtext={walletFetchInProgress ? 'Calculating...' : `${kpis.existingUserCount} existing user${kpis.existingUserCount !== 1 ? 's' : ''} (post-claim)`}
                 icon={UserCheck}
               />
               <KPICard
@@ -481,7 +485,7 @@ const ClaimCodeROI = ({ onNavigateToWallet }) => {
                 subtext={
                   walletFetchInProgress
                     ? 'Calculating...'
-                    : `$${(kpis.revenueContribution - kpis.campaignCost).toLocaleString()} net`
+                    : `$${(kpis.revenueContribution - kpis.uniqueWalletCost).toLocaleString()} net (${kpis.uniqueWalletCount} wallets × $${CLAIM_CODE_COST})`
                 }
                 icon={Percent}
               />
@@ -549,26 +553,33 @@ const ClaimCodeROI = ({ onNavigateToWallet }) => {
                       <th
                         className="px-6 py-3 text-right cursor-pointer select-none hover:text-indigo-600"
                         onClick={() => handleSort('spend')}
+                        title="Spending after claim code redemption"
                       >
-                        <span className="flex items-center gap-1 justify-end">User Spend <SortIcon column="spend" /></span>
+                        <span className="flex items-center gap-1 justify-end">Spend After Claim <SortIcon column="spend" /></span>
                       </th>
                       <th className="px-6 py-3 text-right">Net</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {pagedCodes.map((code, idx) => {
+                    {(() => {
+                      const seenWallets = new Set();
+                      return pagedCodes.map((code, idx) => {
                       const codeId = getCodeIdentifier(code);
                       const redeemed = isCodeRedeemed(code);
                       const wallet = getCodeWallet(code);
                       const walletKey = wallet?.toLowerCase();
                       const date = getCodeDate(code);
                       const spendInfo = walletKey != null ? walletSpend[walletKey] : undefined;
-                      const spend = spendInfo?.totalSpent;
-                      const spendKnown = typeof spend === 'number';
-                      const net = spendKnown ? spend - CLAIM_CODE_COST : null;
+                      const postClaim = spendInfo?.postClaimSpend;
+                      const spendKnown = typeof postClaim === 'number';
+                      const net = spendKnown ? postClaim - CLAIM_CODE_COST : null;
+
+                      // Track duplicate wallets within this page
+                      const isDuplicateWallet = walletKey && redeemed && seenWallets.has(walletKey);
+                      if (walletKey && redeemed) seenWallets.add(walletKey);
 
                       return (
-                        <tr key={codeId || idx} className="hover:bg-indigo-50/30 transition-colors">
+                        <tr key={codeId || idx} className={`hover:bg-indigo-50/30 transition-colors ${isDuplicateWallet ? 'opacity-50' : ''}`}>
                           <td className="px-6 py-3 font-mono text-xs text-slate-700">{codeId}</td>
                           <td className="px-6 py-3">
                             {redeemed ? (
@@ -585,13 +596,20 @@ const ClaimCodeROI = ({ onNavigateToWallet }) => {
                           </td>
                           <td className="px-6 py-3">
                             {wallet ? (
-                              <button
-                                onClick={() => onNavigateToWallet?.(wallet)}
-                                className="font-mono text-xs text-indigo-600 hover:text-indigo-800 hover:underline"
-                                title={wallet}
-                              >
-                                {wallet.slice(0, 6)}...{wallet.slice(-4)}
-                              </button>
+                              <span className="flex items-center gap-1.5">
+                                <button
+                                  onClick={() => onNavigateToWallet?.(wallet)}
+                                  className="font-mono text-xs text-indigo-600 hover:text-indigo-800 hover:underline"
+                                  title={wallet}
+                                >
+                                  {wallet.slice(0, 6)}...{wallet.slice(-4)}
+                                </button>
+                                {isDuplicateWallet && (
+                                  <span className="text-[10px] text-slate-400 italic" title="Same wallet redeemed multiple codes — spend counted once in totals">
+                                    (same wallet)
+                                  </span>
+                                )}
+                              </span>
                             ) : (
                               <span className="text-slate-300">--</span>
                             )}
@@ -618,7 +636,7 @@ const ClaimCodeROI = ({ onNavigateToWallet }) => {
                             {!redeemed ? (
                               <span className="text-slate-300">--</span>
                             ) : spendKnown ? (
-                              <span className="text-slate-700">${spend.toLocaleString()}</span>
+                              <span className="text-slate-700">${postClaim.toLocaleString()}</span>
                             ) : spendInfo === null ? (
                               <span className="text-slate-300">--</span>
                             ) : (
@@ -640,7 +658,8 @@ const ClaimCodeROI = ({ onNavigateToWallet }) => {
                           </td>
                         </tr>
                       );
-                    })}
+                    });
+                    })()}
                     {pagedCodes.length === 0 && (
                       <tr>
                         <td className="px-6 py-6 text-center text-slate-500" colSpan={7}>

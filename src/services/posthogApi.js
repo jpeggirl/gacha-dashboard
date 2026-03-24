@@ -10,8 +10,8 @@ WITH paying_wallets AS (
     sum(toFloat(amount) / 1e6) AS total_spent,
     min(logged_at) AS first_purchase_at
   FROM postgres.purchaseevents
-  WHERE logged_at >= '2026-02-01'
   GROUP BY lower(player)
+  HAVING min(logged_at) >= '2026-02-01'
 ),
 first_touch AS (
   SELECT
