@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { DollarSign, Package, TrendingUp, Trophy, Wallet } from 'lucide-react';
+import { ArrowDownLeft, DollarSign, Package, TrendingDown, TrendingUp, Trophy, Wallet } from 'lucide-react';
 
 // Services
-import { fetchPackPurchases, fetchClaimCode } from './services/api';
+import { fetchPackPurchases, fetchClaimCode, fetchWalletPulls } from './services/api';
 import { fetchLeaderboard } from './services/leaderboardApi';
 import { generateMockData } from './utils/mockData';
 import { processAnalytics } from './utils/analytics';
@@ -77,6 +77,7 @@ function App() {
   const [userArchetype, setUserArchetype] = useState(null); // Archetype for current user
   const [userNickname, setUserNickname] = useState(null); // Custom nickname for current user
   const [userAcquisition, setUserAcquisition] = useState(null); // Acquisition data for current user
+  const [pullsData, setPullsData] = useState(null); // Buyback/pulls data for current user
 
   // Pagination state
   const [inventoryPage, setInventoryPage] = useState(1);
@@ -207,6 +208,22 @@ function App() {
     }
   };
 
+  // Fetch pulls/buyback data for the current wallet
+  const fetchWalletPullsData = async (walletAddress) => {
+    if (!walletAddress) {
+      setPullsData(null);
+      return;
+    }
+
+    try {
+      const data = await fetchWalletPulls(walletAddress);
+      setPullsData(data);
+    } catch (err) {
+      console.warn("Error fetching pulls data:", err);
+      setPullsData(null);
+    }
+  };
+
   // Handle nickname update
   const handleNicknameUpdate = async (newNickname) => {
     if (!stats?.wallet) return;
@@ -280,6 +297,7 @@ function App() {
             await fetchUserArchetype(wallet);
             await fetchUserNickname(wallet);
             fetchUserAcquisitionData(wallet);
+            fetchWalletPullsData(wallet);
           } catch (err) {
             console.warn("API failed for resolved wallet, using mock fallback.", { error: err.message, wallet });
             const mock = generateMockData(wallet);
@@ -291,6 +309,7 @@ function App() {
             await fetchUserArchetype(wallet);
             await fetchUserNickname(wallet);
             fetchUserAcquisitionData(wallet);
+            fetchWalletPullsData(wallet);
           }
           setLoading(false);
           return;
@@ -330,6 +349,7 @@ function App() {
       await fetchUserArchetype(trimmedIdentifier);
       await fetchUserNickname(trimmedIdentifier);
       fetchUserAcquisitionData(trimmedIdentifier);
+      fetchWalletPullsData(trimmedIdentifier);
     } catch (err) {
       console.warn("API failed, using mock fallback.", {
         error: err.message,
@@ -353,6 +373,7 @@ function App() {
       await fetchUserArchetype(trimmedIdentifier);
       await fetchUserNickname(trimmedIdentifier);
       fetchUserAcquisitionData(trimmedIdentifier);
+      fetchWalletPullsData(trimmedIdentifier);
     } finally {
       setLoading(false);
     }
@@ -393,6 +414,24 @@ function App() {
     const lifetimeTotalSpent = data?.totalSpent || null;
     return processAnalytics(filteredData, lifetimeTotalSpent);
   }, [filteredData, data]);
+
+  // Derive buyback totals from pulls data
+  const buybackStats = useMemo(() => {
+    if (!pullsData || !Array.isArray(pullsData)) {
+      return { totalBuyback: 0, buybackCount: 0, buybackRate: 0 };
+    }
+    const itemsWithBuyback = pullsData.filter(item => item.buybackAmount);
+    const totalBuyback = itemsWithBuyback.reduce(
+      (sum, item) => sum + (item.buybackAmount / 1_000_000), 0
+    );
+    const totalSpent = stats?.totalSpent || 0;
+    const buybackRate = totalSpent > 0 ? (totalBuyback / totalSpent) * 100 : 0;
+    return {
+      totalBuyback,
+      buybackCount: itemsWithBuyback.length,
+      buybackRate,
+    };
+  }, [pullsData, stats?.totalSpent]);
 
   // Debug: Log to verify component is rendering
   console.log('App rendering', { loading, hasData: !!data, hasStats: !!stats, error });
@@ -586,10 +625,22 @@ function App() {
                       icon={Trophy}
                     />
                     <KPICard
+                      title="Total Buyback"
+                      value={`$${buybackStats.totalBuyback.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                      subtext={`${buybackStats.buybackCount} item${buybackStats.buybackCount !== 1 ? 's' : ''} sold back`}
+                      icon={ArrowDownLeft}
+                    />
+                    <KPICard
                       title="Net Winnings"
                       value={`${stats.netWinnings >= 0 ? '+' : ''}$${stats.netWinnings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                       subtext={stats.netWinnings >= 0 ? 'Profit' : 'Loss'}
                       icon={Wallet}
+                    />
+                    <KPICard
+                      title="Buyback Rate"
+                      value={`${buybackStats.buybackRate.toFixed(1)}%`}
+                      subtext={`$${buybackStats.totalBuyback.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} of $${stats.totalSpent.toLocaleString()} spent`}
+                      icon={TrendingDown}
                     />
                     <KPICard
                       title="Packs Purchased"

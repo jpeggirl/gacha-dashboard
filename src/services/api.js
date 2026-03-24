@@ -1,6 +1,46 @@
 import { API_CONFIG, DEFAULT_TRANSACTIONS_LIMIT, DEFAULT_INVENTORY_LIMIT, CAMPAIGN_START_DATE } from '../config/constants';
 
 /**
+ * Fetches buyback/pull data for a wallet from the pulls endpoint.
+ * @param {string} wallet - The wallet address
+ * @returns {Promise<Object[]>} Array of pull items
+ */
+export const fetchWalletPulls = async (wallet) => {
+  if (!wallet || !wallet.trim()) {
+    throw new Error('Wallet address is required');
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
+
+  try {
+    const url = `https://api-pull.gacha.game/api/pulls/${encodeURIComponent(wallet.trim())}`;
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: API_CONFIG.HEADERS,
+      signal: controller.signal,
+      mode: 'cors'
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`Pulls API Error: ${response.status} ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    return result.data || [];
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error('Request timeout - please try again');
+    }
+    throw error;
+  }
+};
+
+/**
  * Fetches pack purchase data for a given identifier (wallet, username, or email)
  * @param {string} identifier - The wallet address, Twitter username, or email to query
  * @param {Object} [paginationOptions] - Pagination options

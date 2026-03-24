@@ -1,13 +1,13 @@
 import React from 'react';
 
-const KPICard = ({ title, value, subtext, icon: Icon }) => {
+const KPICard = ({ title, value, subtext, icon: Icon, valueClassName }) => {
   return (
     <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-start justify-between gap-4 hover:shadow-md transition-shadow min-w-[220px] flex-1">
       <div className="min-w-0 flex-1">
         <p className="text-slate-500 text-xs font-semibold mb-1 uppercase tracking-wider">
           {title}
         </p>
-        <h3 className="text-xl sm:text-2xl font-bold text-slate-900 leading-tight whitespace-nowrap tabular-nums overflow-hidden text-ellipsis">
+        <h3 className={`text-xl sm:text-2xl font-bold leading-tight whitespace-nowrap tabular-nums overflow-hidden text-ellipsis ${valueClassName || 'text-slate-900'}`}>
           {value}
         </h3>
         {subtext && (

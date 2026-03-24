@@ -1,5 +1,17 @@
 # Daily Log
 
+### 2026-03-24 16:00 — [Feature] Add Total Buyback & Net PnL KPI cards
+**What:** Added `fetchWalletPulls` API service (GET /api/pulls/{wallet}), new pullsData state in App.jsx, and two new KPI cards: Total Buyback (sum of buybackAmount/1M) and Net PnL (buyback - spent, color-coded green/red). Added `valueClassName` prop to KPICard for colored values.
+**Files:** src/services/api.js, src/App.jsx, src/components/KPICard.jsx
+**Result:** Pass — build succeeds, no errors
+**Lessons:** Pulls API is at a different base path (`/api/pulls/`) than admin endpoints (`/api/admin/`), so used full URL instead of API_CONFIG.BASE_URL.
+
+### 2026-03-24 15:00 — [Enhancement] Fix Claim ROI misleading metrics
+**What:** Two fixes: (1) "User Spend" showed total lifetime spending instead of post-claim spending — switched all metrics and table to use `postClaimSpend`. (2) Same wallet redeeming multiple codes appeared as separate users — added duplicate wallet detection with "(same wallet)" label and dimmed rows. Also updated Net ROI to use unique wallet count for cost basis.
+**Files:** src/components/ClaimCodeROI.jsx
+**Result:** Pass — build succeeds
+**Lessons:** postClaimSpend was already computed and stored but never displayed. Cache already preserves it.
+
 ### 2026-03-22 — [Bugfix] Prevent mock data from persisting to Supabase
 **What:** When API is unreachable, mock data triggered auto-classification saving fake archetypes to Supabase. Passed `dataSource` prop from App.jsx to ArchetypeSection, UserTags, ProfileComments, and UserProfile. Skipped archetype computation on mock data, added stale archetype reset for wallets with 0 real transactions, disabled all manual write controls (tags, comments, nicknames) when using mock data.
 **Files:** src/App.jsx, src/components/ArchetypeSection.jsx, src/components/UserTags.jsx, src/components/ProfileComments.jsx, src/components/UserProfile.jsx
@@ -52,6 +64,18 @@
 **Files:** src/components/UserProfile.jsx, src/App.jsx, src/services/supabaseService.js, src/components/Leaderboard.jsx, src/components/ArchetypeDirectory.jsx
 **Result:** Pass — build succeeds. Requires `nickname` TEXT column in Supabase `user_profiles` table.
 **Lessons:** Reused existing `updateUserProfile` upsert pattern. Bulk fetch with `getNicknamesForWallets` avoids N+1 queries in Leaderboard.
+
+### 2026-03-23 — [Fix] Clean up 222 fake archetype entries from Supabase
+**What:** Mock data had polluted Supabase user_profiles with 222 auto-classified archetype entries before the mock data guard (3b200bb) was added. Ran cleanup script to null out archetype fields for all non-override entries. Manual overrides preserved.
+**Files:** scripts/cleanup-fake-archetypes.js (new)
+**Result:** Pass — 222 entries cleaned, Archetype Directory now only shows manually overridden wallets
+**Lessons:** The mock data guard prevents future pollution, but existing stale DB entries need a one-time cleanup. The per-wallet reset logic in ArchetypeSection only fires when visiting individual wallets, not enough for bulk cleanup.
+
+### 2026-03-23 — [Fix] Acquisition Funnel showing old users and missing First Seen dates
+**What:** Changed paying_wallets CTE from `WHERE logged_at >= '2026-02-01'` to `HAVING min(logged_at) >= '2026-02-01'` so only truly new customers (first-ever purchase after Feb 2026) appear, excluding returning old buyers.
+**Files:** src/services/posthogApi.js
+**Result:** Fix applied — needs verification on live data
+**Lessons:** When filtering for "new" users, filter on absolute first event (HAVING on min), not on individual events within a date window (WHERE on each row).
 
 ### 2026-02-24 — [Feature] Flag New vs Existing Users in Claim Code ROI
 **What:** Classify claim code redeemers as "new" or "existing" based on whether they had transactions before their code redemption date. Added split KPI cards (New User Spending, Existing User Spending) and a Type badge column in the table.
