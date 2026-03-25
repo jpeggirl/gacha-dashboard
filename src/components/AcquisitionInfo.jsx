@@ -19,6 +19,27 @@ const formatSource = (source) => {
   return map[source.toLowerCase()] || source;
 };
 
+const formatReferrer = (domain) => {
+  if (!domain) return null;
+  const map = {
+    't.co': 'Twitter/X',
+    'twitter.com': 'Twitter/X',
+    'x.com': 'Twitter/X',
+    'facebook.com': 'Facebook',
+    'l.facebook.com': 'Facebook',
+    'lm.facebook.com': 'Facebook',
+    'instagram.com': 'Instagram',
+    'l.instagram.com': 'Instagram',
+    'google.com': 'Google',
+    'youtube.com': 'YouTube',
+    'tiktok.com': 'TikTok',
+    'reddit.com': 'Reddit',
+    'discord.com': 'Discord',
+    'discord.gg': 'Discord',
+  };
+  return map[domain.toLowerCase()] || domain;
+};
+
 const formatMedium = (medium) => {
   if (!medium) return null;
   const map = {
@@ -67,10 +88,10 @@ const AcquisitionInfo = ({ acquisition }) => {
         </span>
       )}
 
-      {hasReferrer && !hasChannel && (
+      {hasReferrer && (
         <span className="flex items-center gap-1.5 text-slate-700">
           <Link size={14} className="text-indigo-400" />
-          <span className="font-medium">{referring_domain}</span>
+          <span className="font-medium">{formatReferrer(referring_domain)}</span>
         </span>
       )}
 

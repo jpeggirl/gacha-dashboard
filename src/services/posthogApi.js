@@ -47,17 +47,49 @@ LIMIT 500
 `.trim();
 
 const WALLET_ACQUISITION_QUERY = (wallet) => `
+WITH
+  first_utm AS (
+    SELECT
+      argMin(properties.$session_entry_utm_source, timestamp) AS utm_source,
+      argMin(properties.$session_entry_utm_medium, timestamp) AS utm_medium,
+      argMin(properties.$session_entry_utm_campaign, timestamp) AS utm_campaign
+    FROM events
+    WHERE timestamp >= '2026-02-01' AND timestamp <= now()
+      AND lower(distinct_id) = lower('${wallet}')
+      AND (
+        nullIf(properties.$session_entry_utm_source, '') IS NOT NULL
+        OR nullIf(properties.$session_entry_utm_medium, '') IS NOT NULL
+        OR nullIf(properties.$session_entry_utm_campaign, '') IS NOT NULL
+      )
+  ),
+  first_referrer AS (
+    SELECT
+      argMin(properties.$referring_domain, timestamp) AS referring_domain
+    FROM events
+    WHERE timestamp >= '2026-02-01' AND timestamp <= now()
+      AND lower(distinct_id) = lower('${wallet}')
+      AND nullIf(properties.$referring_domain, '') IS NOT NULL
+      AND properties.$referring_domain != '$direct'
+  ),
+  first_geo AS (
+    SELECT
+      argMin(properties.$geoip_country_name, timestamp) AS country,
+      argMin(properties.$geoip_city_name, timestamp) AS city
+    FROM events
+    WHERE timestamp >= '2026-02-01' AND timestamp <= now()
+      AND lower(distinct_id) = lower('${wallet}')
+      AND nullIf(properties.$geoip_country_name, '') IS NOT NULL
+  )
 SELECT
-  coalesce(nullIf(argMin(properties.$session_entry_utm_source, timestamp), ''), null) AS utm_source,
-  coalesce(nullIf(argMin(properties.$session_entry_utm_medium, timestamp), ''), null) AS utm_medium,
-  coalesce(nullIf(argMin(properties.$session_entry_utm_campaign, timestamp), ''), null) AS utm_campaign,
-  coalesce(nullIf(argMin(properties.$referring_domain, timestamp), ''), null) AS referring_domain,
-  coalesce(nullIf(argMin(properties.$geoip_country_name, timestamp), ''), null) AS country,
-  coalesce(nullIf(argMin(properties.$geoip_city_name, timestamp), ''), null) AS city
-FROM events
-WHERE timestamp >= '2026-02-01'
-  AND timestamp <= now()
-  AND lower(distinct_id) = lower('${wallet}')
+  coalesce(nullIf(u.utm_source, ''), null) AS utm_source,
+  coalesce(nullIf(u.utm_medium, ''), null) AS utm_medium,
+  coalesce(nullIf(u.utm_campaign, ''), null) AS utm_campaign,
+  coalesce(nullIf(r.referring_domain, ''), null) AS referring_domain,
+  coalesce(nullIf(g.country, ''), null) AS country,
+  coalesce(nullIf(g.city, ''), null) AS city
+FROM first_utm u
+CROSS JOIN first_referrer r
+CROSS JOIN first_geo g
 `.trim();
 
 export const fetchWalletAcquisition = async (walletAddress) => {
