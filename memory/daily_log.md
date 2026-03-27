@@ -1,5 +1,11 @@
 # Daily Log
 
+### 2026-03-26 — [Fix] Cache acquisition funnel to prevent PostHog 504 timeouts
+**What:** Added localStorage caching + incremental fetch for the Acquisition Funnel. Cached data shows instantly on load; incremental query fetches only new wallets (since last cache) with a subquery filter that limits the events scan. Results are merged and re-cached.
+**Files:** src/services/posthogApi.js, src/components/AcquisitionFunnelTable.jsx
+**Result:** Pass — build succeeds, no errors
+**Lessons:** The PostHog first_touch CTE scanning all events was the bottleneck. Incremental query adds `AND lower(distinct_id) IN (SELECT wallet FROM paying_wallets)` to limit the events scan to only new wallets, which should be dramatically faster.
+
 ### 2026-03-24 16:00 — [Feature] Add Total Buyback & Net PnL KPI cards
 **What:** Added `fetchWalletPulls` API service (GET /api/pulls/{wallet}), new pullsData state in App.jsx, and two new KPI cards: Total Buyback (sum of buybackAmount/1M) and Net PnL (buyback - spent, color-coded green/red). Added `valueClassName` prop to KPICard for colored values.
 **Files:** src/services/api.js, src/App.jsx, src/components/KPICard.jsx
@@ -76,6 +82,18 @@
 **Files:** src/services/posthogApi.js
 **Result:** Fix applied — needs verification on live data
 **Lessons:** When filtering for "new" users, filter on absolute first event (HAVING on min), not on individual events within a date window (WHERE on each row).
+
+### 2026-03-24 17:00 — [Script] Marketplace User Testing List
+**What:** Created script to generate user list for marketplace testing. Criteria: tagged "collectors" in Supabase OR (5+ PSA slabs in inventory AND >$2k USD spent). Combines inventory CSV parsing (Python for embedded JSON), Supabase tag queries, and pack-purchases API spending data.
+**Files:** scripts/marketplace-user-testing.mjs (new), scripts/_parse_slabs.py (new)
+**Result:** Pass — 25 qualified users found (23 collector-tagged, 2 via slabs+spend only, 2 meeting both criteria). Top spender: SirPantsALot2 at $67,900.
+**Lessons:** Leaderboard API `total_purchase_amount` does NOT match pack-purchases API `totalSpent` — use the latter for actual USD spending. The `.env` file needs `export $(grep -v '^#' .env | xargs)` to load properly in shell; `source .env` alone doesn't work for quoted values.
+
+### 2026-03-25 15:00 — [Enhancement] Improve acquisition source detection on wallet page
+**What:** Updated PostHog wallet acquisition query to use separate CTEs that prefer first non-direct referrer over blindly taking the earliest event (which is often $direct). Added formatReferrer() to map raw domains (t.co, l.facebook.com, discord.gg, etc.) to friendly platform names. Referrer now shows alongside UTM channel info instead of only when channel is absent.
+**Files:** src/services/posthogApi.js, src/components/AcquisitionInfo.jsx
+**Result:** Pass — build succeeds, pushed to main
+**Lessons:** PostHog argMin grabs earliest event which is often $direct. Need separate CTEs filtering out $direct to find meaningful referral sources. Wallet addresses in PostHog use mixed-case checksummed format — always use case-insensitive matching.
 
 ### 2026-02-24 — [Feature] Flag New vs Existing Users in Claim Code ROI
 **What:** Classify claim code redeemers as "new" or "existing" based on whether they had transactions before their code redemption date. Added split KPI cards (New User Spending, Existing User Spending) and a Type badge column in the table.

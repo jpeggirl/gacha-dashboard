@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Users, Download, ChevronUp, ChevronDown, Filter, Wallet } from 'lucide-react';
-import { fetchAcquisitionFunnel } from '../services/posthogApi';
+import { Users, Download, ChevronUp, ChevronDown, Filter, Wallet, RefreshCw } from 'lucide-react';
+import { fetchAcquisitionFunnel, getAcquisitionFunnelCache, saveAcquisitionFunnelCache, mergeAcquisitionData } from '../services/posthogApi';
 
 const SortIcon = ({ column, sortConfig }) => {
   if (sortConfig.key !== column) {
@@ -59,6 +59,8 @@ const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [cachedAt, setCachedAt] = useState(null);
   const [sourceFilter, setSourceFilter] = useState('all');
   const [mediumFilter, setMediumFilter] = useState('all');
   const [sortConfig, setSortConfig] = useState({ key: 'first_seen', direction: 'desc' });
@@ -69,18 +71,51 @@ const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
     loadData();
   }, []);
 
+  const filterUnknown = (rows) => rows.filter(row => row.utm_source !== 'unknown');
+
   const loadData = async () => {
-    setLoading(true);
     setError(null);
-    try {
-      const rows = await fetchAcquisitionFunnel();
-      // Filter out rows where source is "unknown"
-      setData(rows.filter(row => row.utm_source !== 'unknown'));
-    } catch (err) {
-      console.error('[AcquisitionFunnel]', err);
-      setError(err.message);
-    } finally {
+
+    // 1. Try to load cached data immediately
+    const cache = getAcquisitionFunnelCache();
+    if (cache) {
+      setData(filterUnknown(cache.data));
+      setCachedAt(cache.cachedAt);
       setLoading(false);
+
+      // 2. Incremental refresh in background (only new wallets since last cache)
+      setRefreshing(true);
+      try {
+        const freshRows = await fetchAcquisitionFunnel(cache.cachedAt);
+        if (freshRows.length > 0) {
+          const merged = mergeAcquisitionData(cache.data, freshRows);
+          saveAcquisitionFunnelCache(merged);
+          setData(filterUnknown(merged));
+        }
+        // Update cache timestamp even if no new data
+        setCachedAt(new Date().toISOString());
+        if (freshRows.length === 0) {
+          saveAcquisitionFunnelCache(cache.data);
+        }
+      } catch (err) {
+        console.warn('[AcquisitionFunnel] Incremental refresh failed, using cached data:', err.message);
+      } finally {
+        setRefreshing(false);
+      }
+    } else {
+      // 3. No cache — full fetch
+      setLoading(true);
+      try {
+        const rows = await fetchAcquisitionFunnel();
+        saveAcquisitionFunnelCache(rows);
+        setData(filterUnknown(rows));
+        setCachedAt(new Date().toISOString());
+      } catch (err) {
+        console.error('[AcquisitionFunnel]', err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -181,7 +216,20 @@ const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
             <Users className="text-indigo-600" size={24} />
             <div>
               <h2 className="text-xl font-bold text-slate-900">Acquisition Funnel</h2>
-              <p className="text-slate-500 text-sm">New paying users by acquisition channel (since Feb 2026)</p>
+              <div className="flex items-center gap-2">
+                <p className="text-slate-500 text-sm">New paying users by acquisition channel (since Feb 2026)</p>
+                {refreshing && (
+                  <span className="inline-flex items-center gap-1 text-xs text-indigo-500">
+                    <RefreshCw size={12} className="animate-spin" />
+                    Updating…
+                  </span>
+                )}
+                {cachedAt && !refreshing && !loading && (
+                  <span className="text-xs text-slate-400">
+                    Updated {new Date(cachedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-3 flex-wrap">

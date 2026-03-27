@@ -2,7 +2,76 @@ const POSTHOG_API_KEY = import.meta.env.VITE_POSTHOG_API_KEY;
 const POSTHOG_PROJECT_ID = import.meta.env.VITE_POSTHOG_PROJECT_ID;
 const POSTHOG_API_URL = `https://us.posthog.com/api/projects/${POSTHOG_PROJECT_ID}/query`;
 
-const ACQUISITION_QUERY = `
+// --- Acquisition Funnel Cache ---
+const ACQUISITION_CACHE_KEY = 'acquisition_funnel_cache';
+
+export const getAcquisitionFunnelCache = () => {
+  try {
+    const raw = localStorage.getItem(ACQUISITION_CACHE_KEY);
+    if (!raw) return null;
+    const cache = JSON.parse(raw);
+    if (!cache.data || !cache.cachedAt) return null;
+    return cache;
+  } catch {
+    return null;
+  }
+};
+
+export const saveAcquisitionFunnelCache = (data) => {
+  try {
+    localStorage.setItem(ACQUISITION_CACHE_KEY, JSON.stringify({
+      data,
+      cachedAt: new Date().toISOString()
+    }));
+  } catch (e) {
+    console.warn('[AcquisitionFunnel] Failed to save cache:', e);
+  }
+};
+
+/**
+ * Merge incremental results into cached results.
+ * Groups by (utm_source, utm_medium, utm_campaign, referring_domain, country).
+ * Incremental results contain only NEW wallets (first purchase after sinceDate),
+ * so counts can be safely added without double-counting.
+ */
+export const mergeAcquisitionData = (cachedRows, freshRows) => {
+  const keyFn = (row) =>
+    `${row.utm_source}|${row.utm_medium}|${row.utm_campaign}|${row.referring_domain}|${row.country}`;
+
+  const map = new Map();
+
+  for (const row of cachedRows) {
+    map.set(keyFn(row), { ...row, wallets: [...(row.wallets || [])] });
+  }
+
+  for (const row of freshRows) {
+    const key = keyFn(row);
+    const existing = map.get(key);
+    if (existing) {
+      const mergedWallets = [...new Set([...existing.wallets, ...(row.wallets || [])])];
+      existing.wallets = mergedWallets;
+      existing.unique_buyers = mergedWallets.length;
+      existing.total_purchases += row.total_purchases;
+      existing.total_revenue = Math.round((existing.total_revenue + row.total_revenue) * 100) / 100;
+      if (row.first_seen && (!existing.first_seen || new Date(row.first_seen) < new Date(existing.first_seen))) {
+        existing.first_seen = row.first_seen;
+      }
+    } else {
+      map.set(key, { ...row, wallets: [...(row.wallets || [])] });
+    }
+  }
+
+  return Array.from(map.values()).sort((a, b) => b.total_revenue - a.total_revenue);
+};
+
+/**
+ * Build acquisition query. When sinceDate is provided, only fetches wallets
+ * whose first purchase is on/after sinceDate and limits the events scan
+ * to just those wallets (much faster for incremental updates).
+ */
+const buildAcquisitionQuery = (sinceDate) => {
+  const isIncremental = !!sinceDate;
+  return `
 WITH paying_wallets AS (
   SELECT
     lower(player) AS wallet,
@@ -11,7 +80,7 @@ WITH paying_wallets AS (
     min(logged_at) AS first_purchase_at
   FROM postgres.purchaseevents
   GROUP BY lower(player)
-  HAVING min(logged_at) >= '2026-02-01'
+  HAVING min(logged_at) >= '${sinceDate || '2026-02-01'}'
 ),
 first_touch AS (
   SELECT
@@ -25,7 +94,7 @@ first_touch AS (
   FROM events
   WHERE timestamp >= '2026-02-01'
     AND timestamp <= now()
-    AND distinct_id NOT LIKE '$%'
+    AND distinct_id NOT LIKE '$%'${isIncremental ? '\n    AND lower(distinct_id) IN (SELECT wallet FROM paying_wallets)' : ''}
   GROUP BY lower(distinct_id)
 )
 SELECT
@@ -45,6 +114,7 @@ GROUP BY utm_source, utm_medium, utm_campaign, referring_domain, country
 ORDER BY total_revenue DESC
 LIMIT 500
 `.trim();
+};
 
 const WALLET_ACQUISITION_QUERY = (wallet) => `
 WITH
@@ -144,13 +214,18 @@ export const fetchWalletAcquisition = async (walletAddress) => {
   }
 };
 
-export const fetchAcquisitionFunnel = async () => {
+/**
+ * Fetch acquisition funnel data from PostHog.
+ * @param {string|null} sinceDate - ISO date string for incremental fetch (only new wallets since this date)
+ */
+export const fetchAcquisitionFunnel = async (sinceDate = null) => {
   if (!POSTHOG_API_KEY || !POSTHOG_PROJECT_ID ||
       POSTHOG_API_KEY === 'your_posthog_personal_api_key_here' ||
       POSTHOG_PROJECT_ID === 'your_project_id_here') {
     throw new Error('PostHog API key and project ID must be configured in .env');
   }
 
+  const query = buildAcquisitionQuery(sinceDate);
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30000);
 
@@ -164,7 +239,7 @@ export const fetchAcquisitionFunnel = async () => {
       body: JSON.stringify({
         query: {
           kind: 'HogQLQuery',
-          query: ACQUISITION_QUERY
+          query
         }
       }),
       signal: controller.signal
