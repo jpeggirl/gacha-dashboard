@@ -71,15 +71,13 @@ const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
     loadData();
   }, []);
 
-  const filterUnknown = (rows) => rows.filter(row => row.utm_source !== 'unknown');
-
   const loadData = async () => {
     setError(null);
 
     // 1. Try to load cached data immediately
     const cache = getAcquisitionFunnelCache();
     if (cache) {
-      setData(filterUnknown(cache.data));
+      setData(cache.data);
       setCachedAt(cache.cachedAt);
       setLoading(false);
 
@@ -94,7 +92,7 @@ const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
         if (freshRows.length > 0) {
           const merged = mergeAcquisitionData(cache.data, freshRows);
           saveAcquisitionFunnelCache(merged);
-          setData(filterUnknown(merged));
+          setData(merged);
         } else {
           // Update cache timestamp even if no new data
           saveAcquisitionFunnelCache(cache.data);
@@ -106,12 +104,12 @@ const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
         setRefreshing(false);
       }
     } else {
-      // 3. No cache — full fetch (now much faster with paying-wallets filter)
+      // 3. No cache — full fetch
       setLoading(true);
       try {
         const rows = await fetchAcquisitionFunnel();
         saveAcquisitionFunnelCache(rows);
-        setData(filterUnknown(rows));
+        setData(rows);
         setCachedAt(new Date().toISOString());
       } catch (err) {
         console.error('[AcquisitionFunnel]', err);

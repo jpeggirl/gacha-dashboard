@@ -3,7 +3,7 @@ const POSTHOG_PROJECT_ID = import.meta.env.VITE_POSTHOG_PROJECT_ID;
 const POSTHOG_API_URL = `https://us.posthog.com/api/projects/${POSTHOG_PROJECT_ID}/query`;
 
 // --- Acquisition Funnel Cache ---
-const ACQUISITION_CACHE_KEY = 'acquisition_funnel_cache';
+const ACQUISITION_CACHE_KEY = 'acquisition_funnel_cache_v2'; // v2: includes all users, improved labels
 const CACHE_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
 
 export const getAcquisitionFunnelCache = () => {
@@ -177,9 +177,22 @@ GROUP BY lower(distinct_id)
 };
 
 /**
+ * Normalize referring_domain: strip PostHog's '$direct' prefix,
+ * treat empty/null as 'direct'.
+ */
+const normalizeReferrer = (ref) => {
+  if (!ref || ref === '$direct' || ref === '') return 'direct';
+  return ref;
+};
+
+/**
  * Client-side join: combine paying wallet data with first-touch attribution,
  * then group by (source, medium, campaign, referrer, country).
- * Replicates the SQL GROUP BY + coalesce/nullIf logic.
+ *
+ * Source/medium derivation (matches PostHog's classification):
+ *   - Has utm_source → use it (e.g. ig, fb, t.co, email)
+ *   - No utm but has referring_domain → source = referrer, medium = 'referral'
+ *   - Neither → 'Direct / Organic', medium = 'none'
  */
 const joinAndGroup = (payingWallets, touchData) => {
   const touchMap = new Map(touchData.map(t => [t.wallet, t]));
@@ -187,10 +200,14 @@ const joinAndGroup = (payingWallets, touchData) => {
 
   for (const pw of payingWallets) {
     const touch = touchMap.get(pw.wallet) || {};
-    const utm_source = touch.utm_source || 'unknown';
-    const utm_medium = touch.utm_medium || 'unknown';
-    const utm_campaign = touch.utm_campaign || 'unknown';
-    const referring_domain = touch.referring_domain || 'direct';
+    const rawRef = normalizeReferrer(touch.referring_domain);
+    const hasUtm = !!touch.utm_source;
+    const hasReferrer = rawRef !== 'direct';
+
+    const utm_source = hasUtm ? touch.utm_source : hasReferrer ? rawRef : 'Direct / Organic';
+    const utm_medium = touch.utm_medium || (hasReferrer && !hasUtm ? 'referral' : 'none');
+    const utm_campaign = touch.utm_campaign || 'none';
+    const referring_domain = rawRef;
     const country = touch.country || 'unknown';
 
     const key = `${utm_source}|${utm_medium}|${utm_campaign}|${referring_domain}|${country}`;
