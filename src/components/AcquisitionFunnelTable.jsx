@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Users, Download, ChevronUp, ChevronDown, Filter, Wallet, RefreshCw } from 'lucide-react';
-import { fetchAcquisitionFunnel, getAcquisitionFunnelCache, saveAcquisitionFunnelCache, mergeAcquisitionData } from '../services/posthogApi';
+import { fetchAcquisitionFunnel, getAcquisitionFunnelCache, saveAcquisitionFunnelCache, mergeAcquisitionData, isCacheStale } from '../services/posthogApi';
 
 const SortIcon = ({ column, sortConfig }) => {
   if (sortConfig.key !== column) {
@@ -83,7 +83,11 @@ const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
       setCachedAt(cache.cachedAt);
       setLoading(false);
 
-      // 2. Incremental refresh in background (only new wallets since last cache)
+      // 2. Only do incremental refresh if cache is stale (>1 hour old)
+      if (!isCacheStale(cache.cachedAt)) {
+        return; // Cache is fresh, skip API call entirely
+      }
+
       setRefreshing(true);
       try {
         const freshRows = await fetchAcquisitionFunnel(cache.cachedAt);
@@ -91,19 +95,18 @@ const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
           const merged = mergeAcquisitionData(cache.data, freshRows);
           saveAcquisitionFunnelCache(merged);
           setData(filterUnknown(merged));
-        }
-        // Update cache timestamp even if no new data
-        setCachedAt(new Date().toISOString());
-        if (freshRows.length === 0) {
+        } else {
+          // Update cache timestamp even if no new data
           saveAcquisitionFunnelCache(cache.data);
         }
+        setCachedAt(new Date().toISOString());
       } catch (err) {
         console.warn('[AcquisitionFunnel] Incremental refresh failed, using cached data:', err.message);
       } finally {
         setRefreshing(false);
       }
     } else {
-      // 3. No cache — full fetch
+      // 3. No cache — full fetch (now much faster with paying-wallets filter)
       setLoading(true);
       try {
         const rows = await fetchAcquisitionFunnel();

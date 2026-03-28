@@ -1,5 +1,11 @@
 # Daily Log
 
+### 2026-03-28 08:00 — [Fix] Permanent fix for PostHog 504 query timeouts
+**What:** Fixed root cause of PostHog 504 errors: the `first_touch` CTE was scanning ALL events for ALL users on full fetches, but only needed events for paying wallets. Now always filters by `IN (SELECT wallet FROM paying_wallets)`. Also added: retry with exponential backoff (2 retries on 502/503/504), 60s timeout (up from 30s), and 1-hour cache staleness check to avoid unnecessary API calls.
+**Files:** src/services/posthogApi.js, src/components/AcquisitionFunnelTable.jsx
+**Result:** Pass — build succeeds
+**Lessons:** The previous caching fix (Mar 26) only helped returning users. The query itself was still too expensive for first-time loads or stale caches because the events table scan wasn't scoped to paying wallets.
+
 ### 2026-03-26 — [Fix] Cache acquisition funnel to prevent PostHog 504 timeouts
 **What:** Added localStorage caching + incremental fetch for the Acquisition Funnel. Cached data shows instantly on load; incremental query fetches only new wallets (since last cache) with a subquery filter that limits the events scan. Results are merged and re-cached.
 **Files:** src/services/posthogApi.js, src/components/AcquisitionFunnelTable.jsx

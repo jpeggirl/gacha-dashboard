@@ -4,6 +4,7 @@ const POSTHOG_API_URL = `https://us.posthog.com/api/projects/${POSTHOG_PROJECT_I
 
 // --- Acquisition Funnel Cache ---
 const ACQUISITION_CACHE_KEY = 'acquisition_funnel_cache';
+const CACHE_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour — skip background refresh if cache is younger
 
 export const getAcquisitionFunnelCache = () => {
   try {
@@ -15,6 +16,11 @@ export const getAcquisitionFunnelCache = () => {
   } catch {
     return null;
   }
+};
+
+export const isCacheStale = (cachedAt) => {
+  if (!cachedAt) return true;
+  return Date.now() - new Date(cachedAt).getTime() > CACHE_MAX_AGE_MS;
 };
 
 export const saveAcquisitionFunnelCache = (data) => {
@@ -70,7 +76,6 @@ export const mergeAcquisitionData = (cachedRows, freshRows) => {
  * to just those wallets (much faster for incremental updates).
  */
 const buildAcquisitionQuery = (sinceDate) => {
-  const isIncremental = !!sinceDate;
   return `
 WITH paying_wallets AS (
   SELECT
@@ -94,7 +99,8 @@ first_touch AS (
   FROM events
   WHERE timestamp >= '2026-02-01'
     AND timestamp <= now()
-    AND distinct_id NOT LIKE '$%'${isIncremental ? '\n    AND lower(distinct_id) IN (SELECT wallet FROM paying_wallets)' : ''}
+    AND distinct_id NOT LIKE '$%'
+    AND lower(distinct_id) IN (SELECT wallet FROM paying_wallets)
   GROUP BY lower(distinct_id)
 )
 SELECT
@@ -215,10 +221,11 @@ export const fetchWalletAcquisition = async (walletAddress) => {
 };
 
 /**
- * Fetch acquisition funnel data from PostHog.
+ * Fetch acquisition funnel data from PostHog with retry logic.
  * @param {string|null} sinceDate - ISO date string for incremental fetch (only new wallets since this date)
+ * @param {number} maxRetries - Number of retries on 504/timeout (default 2)
  */
-export const fetchAcquisitionFunnel = async (sinceDate = null) => {
+export const fetchAcquisitionFunnel = async (sinceDate = null, maxRetries = 2) => {
   if (!POSTHOG_API_KEY || !POSTHOG_PROJECT_ID ||
       POSTHOG_API_KEY === 'your_posthog_personal_api_key_here' ||
       POSTHOG_PROJECT_ID === 'your_project_id_here') {
@@ -226,47 +233,67 @@ export const fetchAcquisitionFunnel = async (sinceDate = null) => {
   }
 
   const query = buildAcquisitionQuery(sinceDate);
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000);
+  let lastError;
 
-  try {
-    const response = await fetch(POSTHOG_API_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${POSTHOG_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        query: {
-          kind: 'HogQLQuery',
-          query
-        }
-      }),
-      signal: controller.signal
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => 'Unable to read error');
-      throw new Error(`PostHog API Error: ${response.status} - ${errorText}`);
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (attempt > 0) {
+      // Exponential backoff: 2s, 4s
+      await new Promise(r => setTimeout(r, 2000 * attempt));
     }
 
-    const data = await response.json();
-    const { columns, results } = data;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
 
-    return results.map(row => {
-      const obj = {};
-      columns.forEach((col, i) => {
-        obj[col] = row[i];
+    try {
+      const response = await fetch(POSTHOG_API_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${POSTHOG_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          query: {
+            kind: 'HogQLQuery',
+            query
+          }
+        }),
+        signal: controller.signal
       });
-      return obj;
-    });
-  } catch (error) {
-    clearTimeout(timeoutId);
-    if (error.name === 'AbortError') {
-      throw new Error('PostHog request timeout - please try again');
+
+      clearTimeout(timeoutId);
+
+      if (response.status === 504 || response.status === 502 || response.status === 503) {
+        const errorText = await response.text().catch(() => '');
+        lastError = new Error(`PostHog API Error: ${response.status} - ${errorText}`);
+        console.warn(`[AcquisitionFunnel] Attempt ${attempt + 1}/${maxRetries + 1} got ${response.status}, retrying...`);
+        continue;
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unable to read error');
+        throw new Error(`PostHog API Error: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      const { columns, results } = data;
+
+      return results.map(row => {
+        const obj = {};
+        columns.forEach((col, i) => {
+          obj[col] = row[i];
+        });
+        return obj;
+      });
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        lastError = new Error('PostHog request timeout - please try again');
+        console.warn(`[AcquisitionFunnel] Attempt ${attempt + 1}/${maxRetries + 1} timed out, retrying...`);
+        continue;
+      }
+      throw error;
     }
-    throw error;
   }
+
+  throw lastError;
 };
