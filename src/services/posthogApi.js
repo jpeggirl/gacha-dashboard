@@ -152,9 +152,10 @@ HAVING min(logged_at) >= '${sinceDate || '2026-02-01'}'
  * Step 2: Get first-touch attribution for a batch of wallets.
  * Uses an explicit IN list — no cross-datasource subquery.
  */
-const fetchFirstTouchBatch = (wallets) => {
+const fetchFirstTouchBatch = (wallets, sinceDate) => {
   if (wallets.length === 0) return Promise.resolve([]);
 
+  const since = sinceDate || '2026-02-01';
   const inList = wallets.map(w => `'${w.replace(/'/g, "''")}'`).join(', ');
   const query = `
 SELECT
@@ -166,7 +167,7 @@ SELECT
   argMin(properties.$geoip_country_name, timestamp) AS country,
   argMin(properties.$geoip_city_name, timestamp) AS city
 FROM events
-WHERE timestamp >= '2026-02-01'
+WHERE timestamp >= '${since}'
   AND timestamp <= now()
   AND distinct_id NOT LIKE '$%'
   AND lower(distinct_id) IN (${inList})
@@ -174,6 +175,104 @@ GROUP BY lower(distinct_id)
 `.trim();
 
   return runHogQLQuery(query, 30000, 1);
+};
+
+/**
+ * Fetch emails for a batch of wallets from the Postgres users table.
+ */
+const fetchWalletEmailsBatch = (wallets) => {
+  if (wallets.length === 0) return Promise.resolve([]);
+
+  const inList = wallets.map(w => `'${w.replace(/'/g, "''")}'`).join(', ');
+  const query = `
+SELECT lower(wallet) AS wallet, email
+FROM postgres.users
+WHERE lower(wallet) IN (${inList})
+  AND email IS NOT NULL AND email != ''
+`.trim();
+
+  return runHogQLQuery(query, 15000, 1);
+};
+
+/**
+ * Fetch emails for all wallets, batched in groups of 50.
+ * Returns a Map of wallet → email.
+ */
+const fetchWalletEmails = async (walletAddresses) => {
+  const BATCH_SIZE = 50;
+  const batches = [];
+  for (let i = 0; i < walletAddresses.length; i += BATCH_SIZE) {
+    batches.push(walletAddresses.slice(i, i + BATCH_SIZE));
+  }
+
+  const batchResults = await Promise.allSettled(
+    batches.map(batch => fetchWalletEmailsBatch(batch))
+  );
+
+  const emailMap = new Map();
+  batchResults.forEach((result, i) => {
+    if (result.status === 'fulfilled') {
+      result.value.forEach(row => emailMap.set(row.wallet, row.email));
+    } else {
+      console.warn(`[AcquisitionFunnel] Email batch ${i + 1}/${batches.length} failed:`, result.reason?.message);
+    }
+  });
+
+  return emailMap;
+};
+
+/**
+ * Fetch all visitors (wallet-connected) with first-touch attribution.
+ * No wallet filter — scans all events in the date range.
+ * Used for non-paying user inclusion in CSV exports.
+ */
+const fetchAllVisitors = (sinceDate) => {
+  const since = sinceDate || '2026-02-01';
+  const query = `
+SELECT
+  lower(distinct_id) AS wallet,
+  argMin(properties.$session_entry_utm_source, timestamp) AS utm_source,
+  argMin(properties.$session_entry_utm_medium, timestamp) AS utm_medium,
+  argMin(properties.$session_entry_utm_campaign, timestamp) AS utm_campaign,
+  argMin(properties.$referring_domain, timestamp) AS referring_domain,
+  argMin(properties.$geoip_country_name, timestamp) AS country,
+  min(timestamp) AS first_seen_at
+FROM events
+WHERE timestamp >= '${since}'
+  AND timestamp <= now()
+  AND distinct_id NOT LIKE '$%'
+  AND distinct_id LIKE '0x%'
+GROUP BY lower(distinct_id)
+`.trim();
+
+  return runHogQLQuery(query, 60000, 1);
+};
+
+/**
+ * Build per-wallet rows (flat, ungrouped) with same source/medium derivation as joinAndGroup.
+ */
+const buildPerWalletRows = (payingWallets, touchData, emailMap) => {
+  const touchMap = new Map(touchData.map(t => [t.wallet, t]));
+
+  return payingWallets.map(pw => {
+    const touch = touchMap.get(pw.wallet) || {};
+    const rawRef = normalizeReferrer(touch.referring_domain);
+    const hasUtm = !!touch.utm_source;
+    const hasReferrer = rawRef !== 'direct';
+
+    return {
+      wallet: pw.wallet,
+      email: emailMap.get(pw.wallet) || '',
+      utm_source: hasUtm ? touch.utm_source : hasReferrer ? rawRef : 'Direct / Organic',
+      utm_medium: touch.utm_medium || (hasReferrer && !hasUtm ? 'referral' : 'none'),
+      utm_campaign: touch.utm_campaign || 'none',
+      referring_domain: rawRef,
+      country: touch.country || 'unknown',
+      total_purchases: pw.total_purchases,
+      total_spent: Math.round(pw.total_spent * 100) / 100,
+      first_purchase_at: pw.first_purchase_at
+    };
+  });
 };
 
 /**
@@ -244,8 +343,17 @@ const joinAndGroup = (payingWallets, touchData) => {
  * Fetch acquisition funnel data using two separate PostHog queries
  * (Postgres for purchase data, ClickHouse for attribution) then join client-side.
  * This avoids the cross-datasource CTE subquery that caused 504 timeouts.
+ *
+ * Options:
+ *   sinceDate — ISO date string to filter first-purchase-after (default: null = Feb 2026)
+ *   includeEmails — if true, also fetch emails and return per-wallet detail rows
+ *   includeNonPaying — if true (requires includeEmails), also include visitors who never purchased
+ *
+ * Returns:
+ *   When includeEmails is false: grouped array (backward compat)
+ *   When includeEmails is true: { grouped, perWallet }
  */
-export const fetchAcquisitionFunnel = async (sinceDate = null) => {
+export const fetchAcquisitionFunnel = async ({ sinceDate = null, includeEmails = false, includeNonPaying = false } = {}) => {
   if (!POSTHOG_API_KEY || !POSTHOG_PROJECT_ID ||
       POSTHOG_API_KEY === 'your_posthog_personal_api_key_here' ||
       POSTHOG_PROJECT_ID === 'your_project_id_here') {
@@ -254,7 +362,9 @@ export const fetchAcquisitionFunnel = async (sinceDate = null) => {
 
   // Step 1: Get paying wallets from Postgres
   const payingWallets = await fetchPayingWallets(sinceDate);
-  if (payingWallets.length === 0) return [];
+  if (payingWallets.length === 0) {
+    return includeEmails ? { grouped: [], perWallet: [] } : [];
+  }
 
   console.log(`[AcquisitionFunnel] Found ${payingWallets.length} paying wallets, fetching attribution...`);
 
@@ -267,7 +377,7 @@ export const fetchAcquisitionFunnel = async (sinceDate = null) => {
   }
 
   const batchResults = await Promise.allSettled(
-    batches.map(batch => fetchFirstTouchBatch(batch))
+    batches.map(batch => fetchFirstTouchBatch(batch, sinceDate))
   );
 
   const allTouches = [];
@@ -282,7 +392,57 @@ export const fetchAcquisitionFunnel = async (sinceDate = null) => {
   console.log(`[AcquisitionFunnel] Got attribution for ${allTouches.length}/${payingWallets.length} wallets`);
 
   // Step 3: Join and group client-side
-  return joinAndGroup(payingWallets, allTouches);
+  const grouped = joinAndGroup(payingWallets, allTouches);
+
+  if (!includeEmails) return grouped;
+
+  // Step 4: Fetch emails and build per-wallet detail rows
+  // If includeNonPaying, also fetch all visitors and subtract paying wallets
+  const allWalletsForEmails = [...walletAddresses];
+  let nonPayingRows = [];
+
+  if (includeNonPaying) {
+    console.log('[AcquisitionFunnel] Fetching all visitors for non-paying inclusion...');
+    const allVisitors = await fetchAllVisitors(sinceDate);
+    const payingSet = new Set(walletAddresses);
+    const nonPayingVisitors = allVisitors.filter(v => !payingSet.has(v.wallet));
+    console.log(`[AcquisitionFunnel] Found ${nonPayingVisitors.length} non-paying visitors`);
+
+    const nonPayingWallets = nonPayingVisitors.map(v => v.wallet);
+    allWalletsForEmails.push(...nonPayingWallets);
+
+    // Build non-paying rows after we have emails (below)
+    nonPayingRows = nonPayingVisitors;
+  }
+
+  const emailMap = await fetchWalletEmails(allWalletsForEmails);
+  console.log(`[AcquisitionFunnel] Got emails for ${emailMap.size}/${allWalletsForEmails.length} wallets`);
+
+  const perWallet = buildPerWalletRows(payingWallets, allTouches, emailMap);
+
+  if (includeNonPaying && nonPayingRows.length > 0) {
+    for (const v of nonPayingRows) {
+      const rawRef = normalizeReferrer(v.referring_domain);
+      const hasUtm = !!v.utm_source;
+      const hasReferrer = rawRef !== 'direct';
+
+      perWallet.push({
+        wallet: v.wallet,
+        email: emailMap.get(v.wallet) || '',
+        utm_source: hasUtm ? v.utm_source : hasReferrer ? rawRef : 'Direct / Organic',
+        utm_medium: v.utm_medium || (hasReferrer && !hasUtm ? 'referral' : 'none'),
+        utm_campaign: v.utm_campaign || 'none',
+        referring_domain: rawRef,
+        country: v.country || 'unknown',
+        total_purchases: 0,
+        total_spent: 0,
+        first_purchase_at: '',
+        first_seen_at: v.first_seen_at || ''
+      });
+    }
+  }
+
+  return { grouped, perWallet };
 };
 
 // --- Per-wallet acquisition (for wallet profile page) ---

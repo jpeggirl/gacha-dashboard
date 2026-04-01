@@ -1,10 +1,28 @@
 # Daily Log
 
-### 2026-03-28 08:00 — [Fix] Permanent fix for PostHog 504 query timeouts
-**What:** Fixed root cause of PostHog 504 errors: the `first_touch` CTE was scanning ALL events for ALL users on full fetches, but only needed events for paying wallets. Now always filters by `IN (SELECT wallet FROM paying_wallets)`. Also added: retry with exponential backoff (2 retries on 502/503/504), 60s timeout (up from 30s), and 1-hour cache staleness check to avoid unnecessary API calls.
+### 2026-04-01 — [Feature] Include non-paying visitors in CSV export
+**What:** Added "Include non-paying visitors" checkbox next to the Export CSV button. When checked, the export fetches all wallet-connected visitors from PostHog events (filtered to `distinct_id LIKE '0x%'`), subtracts paying wallets client-side, and appends non-paying rows with `total_purchases=0, total_spent=0`. Uses longer 60s timeout for the full events scan. Same source/medium derivation logic applied to non-paying visitors.
 **Files:** src/services/posthogApi.js, src/components/AcquisitionFunnelTable.jsx
 **Result:** Pass — build succeeds
-**Lessons:** The previous caching fix (Mar 26) only helped returning users. The query itself was still too expensive for first-time loads or stale caches because the events table scan wasn't scoped to paying wallets.
+**Lessons:** Filtering `distinct_id LIKE '0x%'` limits to wallet-connected users only, avoiding PostHog anonymous IDs. The full events scan is export-only so the longer timeout is acceptable.
+
+### 2026-04-01 — [Feature] Date Range Picker + Per-Wallet CSV Export for Acquisition Funnel
+**What:** Added date range picker (Last 7 Days, Last 30 Days, Since Feb 2026, Custom) to acquisition funnel table. CSV export now outputs per-wallet detail rows with email addresses fetched from `postgres.users`. `fetchAcquisitionFunnel` signature changed from positional `sinceDate` to `{ sinceDate, includeEmails }` options object. Added `fetchWalletEmails` (batched), `buildPerWalletRows`, and parameterized `sinceDate` through `fetchFirstTouchBatch`. Cache only used for default "Since Feb 2026" range.
+**Files:** src/services/posthogApi.js, src/components/AcquisitionFunnelTable.jsx
+**Result:** Pass — build succeeds, no errors
+**Lessons:** The `postgres.users` table has a `wallet` column and `email` column accessible via HogQL. Keeping backward compat by returning grouped array when `includeEmails` is false.
+
+### 2026-03-28 09:00 — [Fix] Show all paying users, remove filterUnknown
+**What:** The acquisition funnel was only showing 10 of 93+ paying users because `filterUnknown` dropped all rows where `utm_source === 'unknown'` — hiding Direct/Organic and Referral traffic (~80% of users). Removed the filter. Also improved source labels: referral users now show their referring domain (t.co, google.com), and direct users show "Direct / Organic" instead of "unknown". Cache key bumped to v2 to force fresh data.
+**Files:** src/services/posthogApi.js, src/components/AcquisitionFunnelTable.jsx
+**Result:** Pass — build succeeds, pushed to prod
+**Lessons:** A `filterUnknown` that silently drops the majority of data is dangerous. Most real-world traffic has no UTM attribution — only paid campaigns do. The `referring_domain` field carries valuable attribution for organic referral traffic.
+
+### 2026-03-28 08:30 — [Fix] Split PostHog query into two calls to eliminate 504s
+**What:** Rewrote fetchAcquisitionFunnel to use two separate API calls instead of one CTE query. The single query had a cross-datasource subquery (Postgres purchaseevents → ClickHouse events IN filter) that PostHog could never execute within its time limit. Now: (1) fetch paying wallets from Postgres only, (2) fetch first-touch attribution from ClickHouse with explicit IN list (batched in groups of 50, parallel), (3) join + group client-side. Also added shared runHogQLQuery helper with retry on 5xx.
+**Files:** src/services/posthogApi.js
+**Result:** Pass — build succeeds, pushed to prod
+**Lessons:** PostHog HogQL cannot efficiently execute cross-datasource subqueries (Postgres→ClickHouse). The IN (SELECT ...) inside a CTE that spans two data sources will always timeout. Must split into separate API calls and join client-side. Previous fix (adding the IN filter) didn't help because the filter itself was the problem — it was a subquery crossing data sources.
 
 ### 2026-03-26 — [Fix] Cache acquisition funnel to prevent PostHog 504 timeouts
 **What:** Added localStorage caching + incremental fetch for the Acquisition Funnel. Cached data shows instantly on load; incremental query fetches only new wallets (since last cache) with a subquery filter that limits the events scan. Results are merged and re-cached.

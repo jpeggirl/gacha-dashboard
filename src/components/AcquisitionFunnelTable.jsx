@@ -1,6 +1,24 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Users, Download, ChevronUp, ChevronDown, Filter, Wallet, RefreshCw } from 'lucide-react';
+import { Users, Download, ChevronUp, ChevronDown, Filter, Wallet, RefreshCw, Calendar } from 'lucide-react';
 import { fetchAcquisitionFunnel, getAcquisitionFunnelCache, saveAcquisitionFunnelCache, mergeAcquisitionData, isCacheStale } from '../services/posthogApi';
+
+const DEFAULT_SINCE = '2026-02-01';
+
+const DATE_PRESETS = [
+  { label: 'Last 7 Days', value: '7d' },
+  { label: 'Last 30 Days', value: '30d' },
+  { label: 'Since Feb 2026', value: 'all' },
+  { label: 'Custom', value: 'custom' },
+];
+
+const getSinceDate = (preset, customFrom) => {
+  if (preset === 'all') return DEFAULT_SINCE;
+  if (preset === 'custom') return customFrom || DEFAULT_SINCE;
+  const days = preset === '7d' ? 7 : 30;
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
+};
 
 const SortIcon = ({ column, sortConfig }) => {
   if (sortConfig.key !== column) {
@@ -57,6 +75,7 @@ const WalletDropdown = ({ wallets, onNavigateToWallet }) => {
 
 const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
   const [data, setData] = useState([]);
+  const [perWalletData, setPerWalletData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -67,56 +86,89 @@ const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 15;
 
+  // Date range state
+  const [datePreset, setDatePreset] = useState('all');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [includeNonPaying, setIncludeNonPaying] = useState(false);
+
   useEffect(() => {
-    loadData();
+    loadData('all');
   }, []);
 
-  const loadData = async () => {
+  const isDefaultRange = (preset) => preset === 'all';
+
+  const loadData = async (preset, fromOverride) => {
     setError(null);
+    const sinceDate = getSinceDate(preset, fromOverride);
+    const useCache = isDefaultRange(preset);
 
-    // 1. Try to load cached data immediately
-    const cache = getAcquisitionFunnelCache();
-    if (cache) {
-      setData(cache.data);
-      setCachedAt(cache.cachedAt);
-      setLoading(false);
-
-      // 2. Only do incremental refresh if cache is stale (>1 hour old)
-      if (!isCacheStale(cache.cachedAt)) {
-        return; // Cache is fresh, skip API call entirely
-      }
-
-      setRefreshing(true);
-      try {
-        const freshRows = await fetchAcquisitionFunnel(cache.cachedAt);
-        if (freshRows.length > 0) {
-          const merged = mergeAcquisitionData(cache.data, freshRows);
-          saveAcquisitionFunnelCache(merged);
-          setData(merged);
-        } else {
-          // Update cache timestamp even if no new data
-          saveAcquisitionFunnelCache(cache.data);
-        }
-        setCachedAt(new Date().toISOString());
-      } catch (err) {
-        console.warn('[AcquisitionFunnel] Incremental refresh failed, using cached data:', err.message);
-      } finally {
-        setRefreshing(false);
-      }
-    } else {
-      // 3. No cache — full fetch
-      setLoading(true);
-      try {
-        const rows = await fetchAcquisitionFunnel();
-        saveAcquisitionFunnelCache(rows);
-        setData(rows);
-        setCachedAt(new Date().toISOString());
-      } catch (err) {
-        console.error('[AcquisitionFunnel]', err);
-        setError(err.message);
-      } finally {
+    // For default range, try cache first
+    if (useCache) {
+      const cache = getAcquisitionFunnelCache();
+      if (cache) {
+        setData(cache.data);
+        setPerWalletData([]);
+        setCachedAt(cache.cachedAt);
         setLoading(false);
+
+        if (!isCacheStale(cache.cachedAt)) {
+          return;
+        }
+
+        setRefreshing(true);
+        try {
+          const freshRows = await fetchAcquisitionFunnel({ sinceDate: cache.cachedAt });
+          if (freshRows.length > 0) {
+            const merged = mergeAcquisitionData(cache.data, freshRows);
+            saveAcquisitionFunnelCache(merged);
+            setData(merged);
+          } else {
+            saveAcquisitionFunnelCache(cache.data);
+          }
+          setCachedAt(new Date().toISOString());
+        } catch (err) {
+          console.warn('[AcquisitionFunnel] Incremental refresh failed, using cached data:', err.message);
+        } finally {
+          setRefreshing(false);
+        }
+        return;
       }
+    }
+
+    // Fresh fetch (no cache or non-default range)
+    setLoading(true);
+    setPerWalletData([]);
+    try {
+      const result = await fetchAcquisitionFunnel({ sinceDate });
+      // result is always grouped array for non-email fetches
+      const rows = result;
+      if (useCache) {
+        saveAcquisitionFunnelCache(rows);
+      }
+      setData(rows);
+      setCachedAt(useCache ? new Date().toISOString() : null);
+    } catch (err) {
+      console.error('[AcquisitionFunnel]', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDatePresetChange = (preset) => {
+    setDatePreset(preset);
+    setPage(1);
+    if (preset !== 'custom') {
+      loadData(preset);
+    }
+  };
+
+  const handleCustomDateApply = () => {
+    if (customFrom) {
+      setPage(1);
+      loadData('custom', customFrom);
     }
   };
 
@@ -171,28 +223,44 @@ const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
     total_revenue: filtered.reduce((s, r) => s + (r.total_revenue || 0), 0)
   }), [filtered]);
 
-  const exportCSV = () => {
-    const headers = ['first_seen', 'utm_source', 'utm_medium', 'utm_campaign', 'referring_domain', 'country', 'unique_buyers', 'total_purchases', 'total_revenue'];
-    const csvRows = [headers.join(',')];
-    sorted.forEach(row => {
-      csvRows.push(headers.map(h => {
-        const val = row[h] ?? '';
-        return typeof val === 'string' && val.includes(',') ? `"${val}"` : val;
-      }).join(','));
-    });
-    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `acquisition_funnel_${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const exportCSV = async () => {
+    setExporting(true);
+    try {
+      // Fetch per-wallet detail with emails for the current date range
+      const sinceDate = getSinceDate(datePreset, customFrom);
+      const result = await fetchAcquisitionFunnel({ sinceDate, includeEmails: true, includeNonPaying });
+      const rows = result.perWallet || [];
+
+      const headers = ['wallet', 'email', 'utm_source', 'utm_medium', 'utm_campaign', 'referring_domain', 'country', 'total_purchases', 'total_spent', 'first_purchase_at', 'first_seen_at'];
+      const csvRows = [headers.join(',')];
+      rows.forEach(row => {
+        csvRows.push(headers.map(h => {
+          const val = row[h] ?? '';
+          const str = String(val);
+          return str.includes(',') || str.includes('"') || str.includes('\n')
+            ? `"${str.replace(/"/g, '""')}"` : str;
+        }).join(','));
+      });
+
+      const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `acquisition_detail_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('[AcquisitionFunnel] CSV export failed:', err);
+      setError('CSV export failed: ' + err.message);
+    } finally {
+      setExporting(false);
+    }
   };
 
   const formatDate = (val) => {
-    if (!val) return '—';
+    if (!val) return '\u2014';
     const d = new Date(val);
-    if (isNaN(d)) return '—';
+    if (isNaN(d)) return '\u2014';
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
       + ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
   };
@@ -218,11 +286,11 @@ const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
             <div>
               <h2 className="text-xl font-bold text-slate-900">Acquisition Funnel</h2>
               <div className="flex items-center gap-2">
-                <p className="text-slate-500 text-sm">New paying users by acquisition channel (since Feb 2026)</p>
+                <p className="text-slate-500 text-sm">New paying users by acquisition channel</p>
                 {refreshing && (
                   <span className="inline-flex items-center gap-1 text-xs text-indigo-500">
                     <RefreshCw size={12} className="animate-spin" />
-                    Updating…
+                    Updating...
                   </span>
                 )}
                 {cachedAt && !refreshing && !loading && (
@@ -233,35 +301,95 @@ const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-1.5">
-              <Filter size={14} className="text-slate-400" />
-              <select
-                value={sourceFilter}
-                onChange={e => { setSourceFilter(e.target.value); setPage(1); }}
-                className="px-2 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-              >
-                <option value="all">All Sources</option>
-                {sourceOptions.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-              <select
-                value={mediumFilter}
-                onChange={e => { setMediumFilter(e.target.value); setPage(1); }}
-                className="px-2 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-              >
-                <option value="all">All Mediums</option>
-                {mediumOptions.map(m => <option key={m} value={m}>{m}</option>)}
-              </select>
-            </div>
-            <button
-              onClick={exportCSV}
-              disabled={data.length === 0}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <Download size={14} />
-              CSV
-            </button>
+        </div>
+
+        {/* Date range presets */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 mt-4">
+          <div className="flex items-center gap-2 text-slate-600">
+            <Calendar size={16} />
+            <span className="text-sm font-medium">Date Range:</span>
           </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {DATE_PRESETS.map(p => (
+              <button
+                key={p.value}
+                onClick={() => handleDatePresetChange(p.value)}
+                disabled={loading}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                  datePreset === p.value
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 hover:border-indigo-300'
+                } disabled:opacity-50`}
+              >
+                {p.label}
+              </button>
+            ))}
+            {datePreset === 'custom' && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={customFrom}
+                  onChange={e => setCustomFrom(e.target.value)}
+                  className="px-2 py-1.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <span className="text-slate-400 text-sm">to</span>
+                <input
+                  type="date"
+                  value={customTo}
+                  onChange={e => setCustomTo(e.target.value)}
+                  placeholder="now"
+                  className="px-2 py-1.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <button
+                  onClick={handleCustomDateApply}
+                  disabled={!customFrom || loading}
+                  className="px-3 py-1.5 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Apply
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Filters + export */}
+        <div className="flex items-center gap-3 flex-wrap mt-3">
+          <div className="flex items-center gap-1.5">
+            <Filter size={14} className="text-slate-400" />
+            <select
+              value={sourceFilter}
+              onChange={e => { setSourceFilter(e.target.value); setPage(1); }}
+              className="px-2 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            >
+              <option value="all">All Sources</option>
+              {sourceOptions.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <select
+              value={mediumFilter}
+              onChange={e => { setMediumFilter(e.target.value); setPage(1); }}
+              className="px-2 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            >
+              <option value="all">All Mediums</option>
+              {mediumOptions.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+          <label className="flex items-center gap-1.5 text-sm text-slate-600 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={includeNonPaying}
+              onChange={e => setIncludeNonPaying(e.target.checked)}
+              className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            Include non-paying visitors
+          </label>
+          <button
+            onClick={exportCSV}
+            disabled={data.length === 0 || exporting}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {exporting ? <RefreshCw size={14} className="animate-spin" /> : <Download size={14} />}
+            {exporting ? 'Exporting...' : 'Export CSV'}
+          </button>
         </div>
       </div>
 
@@ -276,7 +404,7 @@ const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
               <p className="text-sm text-red-800">{error}</p>
               <button
-                onClick={loadData}
+                onClick={() => loadData(datePreset, customFrom)}
                 className="mt-2 text-sm text-red-600 underline hover:text-red-800"
               >
                 Retry
