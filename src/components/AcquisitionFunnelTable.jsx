@@ -229,7 +229,13 @@ const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
       // Fetch per-wallet detail with emails for the current date range
       const sinceDate = getSinceDate(datePreset, customFrom);
       const result = await fetchAcquisitionFunnel({ sinceDate, includeEmails: true, includeNonPaying });
-      const rows = result.perWallet || [];
+      let rows = result.perWallet || [];
+      if (sourceFilter !== 'all') {
+        rows = rows.filter(r => r.utm_source === sourceFilter);
+      }
+      if (mediumFilter !== 'all') {
+        rows = rows.filter(r => r.utm_medium === mediumFilter);
+      }
 
       const headers = ['wallet', 'email', 'utm_source', 'utm_medium', 'utm_campaign', 'referring_domain', 'country', 'total_purchases', 'total_spent', 'first_purchase_at', 'first_seen_at'];
       const csvRows = [headers.join(',')];
@@ -246,7 +252,11 @@ const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `acquisition_detail_${new Date().toISOString().slice(0, 10)}.csv`;
+      const filterSuffix = [
+        sourceFilter !== 'all' ? sourceFilter : '',
+        mediumFilter !== 'all' ? mediumFilter : '',
+      ].filter(Boolean).join('_');
+      a.download = `acquisition_detail_${new Date().toISOString().slice(0, 10)}${filterSuffix ? '_' + filterSuffix : ''}.csv`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {

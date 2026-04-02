@@ -4,7 +4,6 @@ import { getAnnouncementsFeed } from '../services/supabaseService';
 import { supabase, isSupabaseReady } from '../config/supabase';
 import Leaderboard from './Leaderboard';
 import KPICard from './KPICard';
-import AcquisitionFunnelTable from './AcquisitionFunnelTable';
 
 const SUMMARY_API_URL = 'https://api-pull.gacha.game/api/report/dd3b02be-f916-4857-8103-e263d01c3248';
 
@@ -124,11 +123,6 @@ const HomePage = ({ onNavigateToWallet }) => {
             subtext={summaryError ? summaryError : 'All Time'}
             icon={Package}
           />
-        </div>
-
-        {/* Acquisition Funnel Table */}
-        <div className="mb-8">
-          <AcquisitionFunnelTable onNavigateToWallet={handleNavigateToWallet} />
         </div>
 
         {/* Leaderboard + Live Feed layout */}

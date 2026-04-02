@@ -30,6 +30,7 @@ import UserTags from './components/UserTags';
 import ArchetypeSection from './components/ArchetypeSection';
 import ArchetypeDirectory from './components/ArchetypeDirectory';
 import AcquisitionInfo from './components/AcquisitionInfo';
+import AcquisitionFunnelTable from './components/AcquisitionFunnelTable';
 
 // Config
 import { DEFAULT_WALLET, DEFAULT_TRANSACTIONS_LIMIT, DEFAULT_INVENTORY_LIMIT } from './config/constants';
@@ -441,33 +442,49 @@ function App() {
     return <Login onLogin={setIsAuthenticated} />;
   }
 
+  const navigateToWallet = (walletAddress) => {
+    setCurrentView('wallet');
+    setInventoryPage(1);
+    fetchData(null, walletAddress);
+  };
+
+  const headerProps = {
+    searchTerm,
+    onSearchChange: setSearchTerm,
+    onSearchSubmit: (e) => {
+      e.preventDefault();
+      setCurrentView('wallet');
+      setInventoryPage(1);
+      fetchData(e);
+    },
+    loading,
+    onLogout: handleLogout,
+    currentView,
+    onNavigateHome: () => setCurrentView('home'),
+    onNavigateToAcquisition: () => setCurrentView('acquisition'),
+    onNavigateToClaimCodes: () => setCurrentView('claim-codes'),
+    onNavigateToArchetypes: () => setCurrentView('archetypes'),
+    currentUser,
+  };
+
   // Show homepage if on home view
   if (currentView === 'home') {
     return (
       <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-        <Header
-          searchTerm={searchTerm}
-          onSearchChange={setSearchTerm}
-          onSearchSubmit={(e) => {
-            e.preventDefault();
-            setCurrentView('wallet');
-            setInventoryPage(1);
-            fetchData(e);
-          }}
-          loading={loading}
-          onLogout={handleLogout}
-          currentView={currentView}
-          onNavigateHome={() => setCurrentView('home')}
-          onNavigateToClaimCodes={() => setCurrentView('claim-codes')}
-          onNavigateToArchetypes={() => setCurrentView('archetypes')}
-        />
-        <HomePage
-          onNavigateToWallet={(walletAddress) => {
-            setCurrentView('wallet');
-            setInventoryPage(1);
-            fetchData(null, walletAddress);
-          }}
-        />
+        <Header {...headerProps} />
+        <HomePage onNavigateToWallet={navigateToWallet} />
+      </div>
+    );
+  }
+
+  // Show acquisition funnel page
+  if (currentView === 'acquisition') {
+    return (
+      <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
+        <Header {...headerProps} />
+        <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <AcquisitionFunnelTable onNavigateToWallet={navigateToWallet} />
+        </main>
       </div>
     );
   }
@@ -476,31 +493,9 @@ function App() {
   if (currentView === 'claim-codes') {
     return (
       <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-        <Header
-          searchTerm={searchTerm}
-          onSearchChange={setSearchTerm}
-          onSearchSubmit={(e) => {
-            e.preventDefault();
-            setCurrentView('wallet');
-            setInventoryPage(1);
-            fetchData(e);
-          }}
-          loading={loading}
-          onLogout={handleLogout}
-          currentView={currentView}
-          onNavigateHome={() => setCurrentView('home')}
-          onNavigateToClaimCodes={() => setCurrentView('claim-codes')}
-          onNavigateToArchetypes={() => setCurrentView('archetypes')}
-          currentUser={currentUser}
-        />
+        <Header {...headerProps} />
         <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <ClaimCodeROI
-            onNavigateToWallet={(walletAddress) => {
-              setCurrentView('wallet');
-              setInventoryPage(1);
-              fetchData(null, walletAddress);
-            }}
-          />
+          <ClaimCodeROI onNavigateToWallet={navigateToWallet} />
         </main>
       </div>
     );
@@ -510,31 +505,9 @@ function App() {
   if (currentView === 'archetypes') {
     return (
       <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-        <Header
-          searchTerm={searchTerm}
-          onSearchChange={setSearchTerm}
-          onSearchSubmit={(e) => {
-            e.preventDefault();
-            setCurrentView('wallet');
-            setInventoryPage(1);
-            fetchData(e);
-          }}
-          loading={loading}
-          onLogout={handleLogout}
-          currentView={currentView}
-          onNavigateHome={() => setCurrentView('home')}
-          onNavigateToClaimCodes={() => setCurrentView('claim-codes')}
-          onNavigateToArchetypes={() => setCurrentView('archetypes')}
-          currentUser={currentUser}
-        />
+        <Header {...headerProps} />
         <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <ArchetypeDirectory
-            onNavigateToWallet={(walletAddress) => {
-              setCurrentView('wallet');
-              setInventoryPage(1);
-              fetchData(null, walletAddress);
-            }}
-          />
+          <ArchetypeDirectory onNavigateToWallet={navigateToWallet} />
         </main>
       </div>
     );
@@ -542,21 +515,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-12">
-      <Header
-        searchTerm={searchTerm}
-        onSearchChange={setSearchTerm}
-        onSearchSubmit={(e) => {
-          setInventoryPage(1);
-          fetchData(e);
-        }}
-        loading={loading}
-        onLogout={handleLogout}
-        currentView={currentView}
-        onNavigateHome={() => setCurrentView('home')}
-        onNavigateToClaimCodes={() => setCurrentView('claim-codes')}
-        onNavigateToArchetypes={() => setCurrentView('archetypes')}
-        currentUser={currentUser}
-      />
+      <Header {...headerProps} onSearchSubmit={(e) => { setInventoryPage(1); fetchData(e); }} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 relative">
         {loading && <LoadingOverlay />}

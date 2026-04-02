@@ -1,7 +1,7 @@
 import React from 'react';
-import { Search, Activity, RefreshCw, LogOut, Home, User, BarChart3, Users } from 'lucide-react';
+import { Search, Activity, RefreshCw, LogOut, Home, User, BarChart3, Users, Megaphone } from 'lucide-react';
 
-const Header = ({ searchTerm, onSearchChange, onSearchSubmit, loading, onLogout, currentView, onNavigateHome, onNavigateToClaimCodes, onNavigateToArchetypes, currentUser }) => {
+const Header = ({ searchTerm, onSearchChange, onSearchSubmit, loading, onLogout, currentView, onNavigateHome, onNavigateToClaimCodes, onNavigateToArchetypes, onNavigateToAcquisition, currentUser }) => {
   return (
     <header className="bg-slate-900 text-white p-4 shadow-lg sticky top-0 z-10 border-b border-slate-700">
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
@@ -28,6 +28,20 @@ const Header = ({ searchTerm, onSearchChange, onSearchSubmit, loading, onLogout,
             >
               <Home size={16} />
               <span>Home</span>
+            </button>
+          )}
+          {onNavigateToAcquisition && (
+            <button
+              onClick={onNavigateToAcquisition}
+              className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all ${
+                currentView === 'acquisition'
+                  ? 'text-white bg-slate-700'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-700'
+              }`}
+              title="Acquisition Funnel"
+            >
+              <Megaphone size={16} />
+              <span>Acquisition</span>
             </button>
           )}
           {onNavigateToClaimCodes && (
