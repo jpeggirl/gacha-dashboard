@@ -141,6 +141,39 @@ export const getUserTags = async (walletAddress) => {
   }
 };
 
+/**
+ * Batch fetch tags for multiple wallets in a single Supabase query.
+ * Returns a Map of lowercase wallet -> tags array.
+ */
+export const getTagsForWallets = async (walletAddresses) => {
+  try {
+    if (!isSupabaseReady || !walletAddresses || walletAddresses.length === 0) {
+      return { data: {}, error: null };
+    }
+
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('wallet_address, tags')
+      .in('wallet_address', walletAddresses);
+
+    if (error) throw error;
+
+    const tagsMap = {};
+    if (data) {
+      data.forEach(profile => {
+        if (Array.isArray(profile.tags) && profile.tags.length > 0) {
+          tagsMap[profile.wallet_address.toLowerCase()] = profile.tags;
+        }
+      });
+    }
+
+    return { data: tagsMap, error: null };
+  } catch (error) {
+    console.error('Error batch fetching tags:', error);
+    return { data: {}, error };
+  }
+};
+
 export const addUserTag = async (walletAddress, tag, author = 'Admin') => {
   try {
     // Check if Supabase is configured

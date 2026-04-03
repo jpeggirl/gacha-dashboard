@@ -293,24 +293,28 @@ function App() {
             });
             setData(jsonData);
             setDataSource('api');
-            await fetchLeaderboardData();
-            await fetchUserTags(wallet);
-            await fetchUserArchetype(wallet);
-            await fetchUserNickname(wallet);
-            fetchUserAcquisitionData(wallet);
-            fetchWalletPullsData(wallet);
+            await Promise.allSettled([
+              fetchLeaderboardData(),
+              fetchUserTags(wallet),
+              fetchUserArchetype(wallet),
+              fetchUserNickname(wallet),
+              fetchUserAcquisitionData(wallet),
+              fetchWalletPullsData(wallet),
+            ]);
           } catch (err) {
             console.warn("API failed for resolved wallet, using mock fallback.", { error: err.message, wallet });
             const mock = generateMockData(wallet);
             await new Promise(resolve => setTimeout(resolve, 600));
             setData(mock);
             setDataSource('mock');
-            await fetchLeaderboardData();
-            await fetchUserTags(wallet);
-            await fetchUserArchetype(wallet);
-            await fetchUserNickname(wallet);
-            fetchUserAcquisitionData(wallet);
-            fetchWalletPullsData(wallet);
+            await Promise.allSettled([
+              fetchLeaderboardData(),
+              fetchUserTags(wallet),
+              fetchUserArchetype(wallet),
+              fetchUserNickname(wallet),
+              fetchUserAcquisitionData(wallet),
+              fetchWalletPullsData(wallet),
+            ]);
           }
           setLoading(false);
           return;
@@ -342,39 +346,35 @@ function App() {
       setData(jsonData);
       setDataSource('api');
 
-      // Fetch leaderboard to check if user is in top 50
-      await fetchLeaderboardData();
-
-      // Fetch user tags, archetype, and nickname
-      await fetchUserTags(trimmedIdentifier);
-      await fetchUserArchetype(trimmedIdentifier);
-      await fetchUserNickname(trimmedIdentifier);
-      fetchUserAcquisitionData(trimmedIdentifier);
-      fetchWalletPullsData(trimmedIdentifier);
+      // Fetch all supplementary data in parallel — none depend on each other
+      await Promise.allSettled([
+        fetchLeaderboardData(),
+        fetchUserTags(trimmedIdentifier),
+        fetchUserArchetype(trimmedIdentifier),
+        fetchUserNickname(trimmedIdentifier),
+        fetchUserAcquisitionData(trimmedIdentifier),
+        fetchWalletPullsData(trimmedIdentifier),
+      ]);
     } catch (err) {
       console.warn("API failed, using mock fallback.", {
         error: err.message,
         name: err.name,
         wallet: identifier
       });
-      // Fallback to Mock Data matching the structure
       const mock = generateMockData(trimmedIdentifier);
-
-      // Simulate network delay for better UX
       await new Promise(resolve => setTimeout(resolve, 600));
 
       setData(mock);
       setDataSource('mock');
 
-      // Still try to fetch leaderboard even with mock data
-      await fetchLeaderboardData();
-
-      // Fetch user tags, archetype, and nickname
-      await fetchUserTags(trimmedIdentifier);
-      await fetchUserArchetype(trimmedIdentifier);
-      await fetchUserNickname(trimmedIdentifier);
-      fetchUserAcquisitionData(trimmedIdentifier);
-      fetchWalletPullsData(trimmedIdentifier);
+      await Promise.allSettled([
+        fetchLeaderboardData(),
+        fetchUserTags(trimmedIdentifier),
+        fetchUserArchetype(trimmedIdentifier),
+        fetchUserNickname(trimmedIdentifier),
+        fetchUserAcquisitionData(trimmedIdentifier),
+        fetchWalletPullsData(trimmedIdentifier),
+      ]);
     } finally {
       setLoading(false);
     }

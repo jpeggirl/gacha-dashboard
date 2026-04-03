@@ -135,23 +135,35 @@ export const fetchPackPurchases = async (identifier, paginationOptions = {}) => 
 
       // Fallback for inconsistent pagination metadata.
       const shouldScanUntilEmpty = totalPages <= 1 && Number.isNaN(totalItems);
-      const maxPages = shouldScanUntilEmpty ? 50 : totalPages;
 
-      for (let page = 2; page <= maxPages; page++) {
-        const pageData = await fetchPage(page, transactionsLimit, inventoryPage, inventoryLimit);
-        const pageTransactions = pageData?.transactions?.data;
+      if (!shouldScanUntilEmpty && totalPages > 1) {
+        // Known page count — fetch all remaining pages in parallel
+        const pageNumbers = [];
+        for (let p = 2; p <= totalPages; p++) pageNumbers.push(p);
 
-        if (!Array.isArray(pageTransactions) || pageTransactions.length === 0) {
-          if (shouldScanUntilEmpty) {
-            break;
+        const results = await Promise.allSettled(
+          pageNumbers.map(p => fetchPage(p, transactionsLimit, inventoryPage, inventoryLimit))
+        );
+
+        // Stitch pages in order
+        results.forEach((result) => {
+          if (result.status === 'fulfilled') {
+            const pageTransactions = result.value?.transactions?.data;
+            if (Array.isArray(pageTransactions)) {
+              allTransactions.push(...pageTransactions);
+            }
           }
-          continue;
-        }
+        });
+      } else if (shouldScanUntilEmpty) {
+        // Unknown total — must fetch sequentially until empty
+        const maxPages = 50;
+        for (let page = 2; page <= maxPages; page++) {
+          const pageData = await fetchPage(page, transactionsLimit, inventoryPage, inventoryLimit);
+          const pageTransactions = pageData?.transactions?.data;
 
-        allTransactions.push(...pageTransactions);
-
-        if (shouldScanUntilEmpty && pageTransactions.length < transactionsLimit) {
-          break;
+          if (!Array.isArray(pageTransactions) || pageTransactions.length === 0) break;
+          allTransactions.push(...pageTransactions);
+          if (pageTransactions.length < transactionsLimit) break;
         }
       }
 

@@ -1,5 +1,11 @@
 # Daily Log
 
+### 2026-04-03 — [Perf] Fix dashboard loading speed
+**What:** Fixed three major performance bottlenecks: (1) Parallelized 6 independent API calls in fetchData that were awaited sequentially (leaderboard, tags, archetype, nickname, acquisition, pulls), (2) Replaced N+1 Supabase queries in Leaderboard (50 individual getUserTags calls) with a single batch query via new getTagsForWallets(), (3) Parallelized transaction page fetching when totalPages is known.
+**Files:** src/App.jsx, src/components/Leaderboard.jsx, src/services/supabaseService.js, src/services/api.js
+**Result:** Pass — build succeeds, no errors
+**Lessons:** Always check for sequential awaits on independent calls. N+1 query pattern on Supabase is easy to miss when individual calls are wrapped in helper functions.
+
 ### 2026-04-01 — [Feature] Include non-paying visitors in CSV export
 **What:** Added "Include non-paying visitors" checkbox next to the Export CSV button. When checked, the export fetches all wallet-connected visitors from PostHog events (filtered to `distinct_id LIKE '0x%'`), subtracts paying wallets client-side, and appends non-paying rows with `total_purchases=0, total_spent=0`. Uses longer 60s timeout for the full events scan. Same source/medium derivation logic applied to non-paying visitors.
 **Files:** src/services/posthogApi.js, src/components/AcquisitionFunnelTable.jsx

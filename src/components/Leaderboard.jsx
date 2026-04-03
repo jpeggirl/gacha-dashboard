@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Trophy, Calendar, ExternalLink, RefreshCw } from 'lucide-react';
 import { fetchLeaderboard } from '../services/leaderboardApi';
-import { getUserTags, getNicknamesForWallets } from '../services/supabaseService';
+import { getTagsForWallets, getNicknamesForWallets } from '../services/supabaseService';
 import TagBadge from './TagBadge';
 
 const Leaderboard = ({ onNavigateToWallet }) => {
@@ -81,29 +81,18 @@ const Leaderboard = ({ onNavigateToWallet }) => {
     return `https://twitter.com/${cleanUsername}`;
   };
 
-  // Fetch tags for all users in the leaderboard
+  // Fetch tags for all users in the leaderboard in a single batch query
   const fetchTagsForUsers = async (leaderboardData) => {
     if (!leaderboardData || leaderboardData.length === 0) return;
-    
-    const tagsMap = {};
-    
-    // Fetch tags for all wallets in parallel
-    const tagPromises = leaderboardData.map(async (item) => {
-      const wallet = item.wallet || item.wallet_address;
-      if (!wallet) return;
-      
-      try {
-        const { data, error } = await getUserTags(wallet);
-        if (!error && data) {
-          tagsMap[wallet.toLowerCase()] = data;
-        }
-      } catch (err) {
-        console.error(`Error fetching tags for ${wallet}:`, err);
-      }
-    });
-    
-    await Promise.all(tagPromises);
-    setUserTags(tagsMap);
+
+    const wallets = leaderboardData
+      .map(item => item.wallet || item.wallet_address)
+      .filter(Boolean);
+
+    const { data } = await getTagsForWallets(wallets);
+    if (data) {
+      setUserTags(data);
+    }
   };
 
   // Fetch nicknames for all users in the leaderboard
