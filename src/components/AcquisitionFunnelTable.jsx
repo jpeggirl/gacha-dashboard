@@ -87,14 +87,14 @@ const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
   const PAGE_SIZE = 15;
 
   // Date range state
-  const [datePreset, setDatePreset] = useState('all');
+  const [datePreset, setDatePreset] = useState('7d');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [exporting, setExporting] = useState(false);
   const [includeNonPaying, setIncludeNonPaying] = useState(false);
 
   useEffect(() => {
-    loadData('all');
+    loadData('7d');
   }, []);
 
   const isDefaultRange = (preset) => preset === 'all';
