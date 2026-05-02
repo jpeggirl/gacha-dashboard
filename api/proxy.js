@@ -1,9 +1,40 @@
+import crypto from 'crypto';
+
 const UPSTREAM = 'https://api-pull.gacha.game';
 
+/**
+ * Mint a short-lived HS256 JWT for the upstream admin API.
+ * The backend expects issuer "gacha-admin" and verifies with ADMIN_JWT_SECRET.
+ */
+function mintServiceJwt(secret) {
+  const header = { alg: 'HS256', typ: 'JWT' };
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    iss: 'gacha-admin',
+    sub: 'dashboard-service',
+    email: 'dashboard@gacha.game',
+    role: 'super_admin',
+    iat: now,
+    exp: now + 300, // 5-minute expiry — minted per request
+  };
+
+  const b64 = (obj) =>
+    Buffer.from(JSON.stringify(obj))
+      .toString('base64url');
+
+  const unsigned = `${b64(header)}.${b64(payload)}`;
+  const sig = crypto
+    .createHmac('sha256', secret)
+    .update(unsigned)
+    .digest('base64url');
+
+  return `${unsigned}.${sig}`;
+}
+
 export default async function handler(req, res) {
-  const adminPassword = process.env.ADMIN_PASSWORD || process.env.VITE_ADMIN_PASSWORD;
-  if (!adminPassword) {
-    return res.status(500).json({ error: 'Server misconfigured: ADMIN_PASSWORD not set' });
+  const jwtSecret = process.env.ADMIN_JWT_SECRET;
+  if (!jwtSecret) {
+    return res.status(500).json({ error: 'Server misconfigured: ADMIN_JWT_SECRET not set' });
   }
 
   // Extract the target path from the query parameter
@@ -18,10 +49,11 @@ export default async function handler(req, res) {
   const qs = params.toString();
   const upstreamUrl = `${UPSTREAM}${targetPath}${qs ? '?' + qs : ''}`;
 
-  // Build headers — forward content-type, add admin password
+  // Build headers — JWT auth for admin endpoints
+  const token = mintServiceJwt(jwtSecret);
   const headers = {
     'Content-Type': 'application/json',
-    'x-admin-password': adminPassword,
+    'Authorization': `Bearer ${token}`,
   };
 
   try {
