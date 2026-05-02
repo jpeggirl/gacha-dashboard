@@ -1,38 +1,29 @@
 // API Configuration
-// Note: In .env file, if password contains special characters, use quotes: VITE_ADMIN_PASSWORD="your-password"
-const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD;
-
-if (!ADMIN_PASSWORD) {
-  // Only show error once to reduce console noise
-  if (!window.adminPasswordErrorShown) {
-    console.error('[Config] VITE_ADMIN_PASSWORD is not set in Vercel environment variables!');
-    console.error('[Config] API calls will fail. Add VITE_ADMIN_PASSWORD in Vercel Settings → Environment Variables');
-    if (!import.meta.env.DEV) {
-      window.adminPasswordErrorShown = true;
-    }
-  }
-}
-
-// Debug: Log password status (without revealing the actual password)
-if (import.meta.env.DEV) {
-  console.log('[Config] Admin password loaded:', {
-    fromEnv: !!import.meta.env.VITE_ADMIN_PASSWORD,
-    length: ADMIN_PASSWORD?.length || 0,
-    isSet: !!ADMIN_PASSWORD
-  });
-}
+// All requests are proxied through /api/proxy to keep the admin password server-side.
+// In local dev, Vite proxies /api to the upstream directly using VITE_ADMIN_PASSWORD.
+const PROXY_BASE = '/api/proxy';
 
 export const API_CONFIG = {
-  BASE_URL: 'https://api-pull.gacha.game/api/admin',
+  PROXY_BASE,
   ENDPOINTS: {
-    PACK_PURCHASES: '/pack-purchases',
-    CLAIM_CODES: '/claim-codes'
+    PACK_PURCHASES: '/api/admin/pack-purchases',
+    CLAIM_CODES: '/api/admin/claim-codes'
   },
   HEADERS: {
-    'x-admin-password': ADMIN_PASSWORD,
     'Content-Type': 'application/json'
   },
   TIMEOUT: 10000 // milliseconds (10 seconds)
+};
+
+/**
+ * Build a proxied URL. In production, routes through the Vercel serverless proxy.
+ * @param {string} upstreamPath - The upstream API path (e.g. "/api/admin/pack-purchases/0x...")
+ * @param {Object} [queryParams] - Additional query parameters
+ * @returns {string} The proxied URL
+ */
+export const buildProxyUrl = (upstreamPath, queryParams = {}) => {
+  const params = new URLSearchParams({ path: upstreamPath, ...queryParams });
+  return `${PROXY_BASE}?${params}`;
 };
 
 // Pack Definitions - Note: Pack names and prices now come from the API

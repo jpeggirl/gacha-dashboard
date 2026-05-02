@@ -5,7 +5,9 @@ import { supabase, isSupabaseReady } from '../config/supabase';
 import Leaderboard from './Leaderboard';
 import KPICard from './KPICard';
 
-const SUMMARY_API_URL = 'https://api-pull.gacha.game/api/report/dd3b02be-f916-4857-8103-e263d01c3248';
+import { buildProxyUrl } from '../config/constants';
+
+const SUMMARY_API_URL = buildProxyUrl('/api/report/dd3b02be-f916-4857-8103-e263d01c3248');
 
 const HomePage = ({ onNavigateToWallet }) => {
   // Create a wrapper function that accepts wallet address

@@ -1,4 +1,4 @@
-import { API_CONFIG, DEFAULT_TRANSACTIONS_LIMIT, DEFAULT_INVENTORY_LIMIT, CAMPAIGN_START_DATE } from '../config/constants';
+import { API_CONFIG, buildProxyUrl, DEFAULT_TRANSACTIONS_LIMIT, DEFAULT_INVENTORY_LIMIT, CAMPAIGN_START_DATE } from '../config/constants';
 
 /**
  * Fetches buyback/pull data for a wallet from the pulls endpoint.
@@ -14,13 +14,12 @@ export const fetchWalletPulls = async (wallet) => {
   const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
 
   try {
-    const url = `https://api-pull.gacha.game/api/pulls/${encodeURIComponent(wallet.trim())}`;
+    const url = buildProxyUrl(`/api/pulls/${encodeURIComponent(wallet.trim())}`);
 
     const response = await fetch(url, {
       method: 'GET',
       headers: API_CONFIG.HEADERS,
       signal: controller.signal,
-      mode: 'cors'
     });
 
     clearTimeout(timeoutId);
@@ -64,14 +63,15 @@ export const fetchPackPurchases = async (identifier, paginationOptions = {}) => 
   } = paginationOptions;
 
   const buildUrl = (txPage, txLimit, invPage, invLimit) => {
-    const params = new URLSearchParams({
-      transactionsPage: String(txPage),
-      transactionsLimit: String(txLimit),
-      inventoryPage: String(invPage),
-      inventoryLimit: String(invLimit),
-    });
-
-    return `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.PACK_PURCHASES}/${encodeURIComponent(identifier)}?${params}`;
+    return buildProxyUrl(
+      `${API_CONFIG.ENDPOINTS.PACK_PURCHASES}/${encodeURIComponent(identifier)}`,
+      {
+        transactionsPage: String(txPage),
+        transactionsLimit: String(txLimit),
+        inventoryPage: String(invPage),
+        inventoryLimit: String(invLimit),
+      }
+    );
   };
 
   const fetchPage = async (txPage, txLimit, invPage, invLimit) => {
@@ -85,7 +85,6 @@ export const fetchPackPurchases = async (identifier, paginationOptions = {}) => 
         method: 'GET',
         headers: API_CONFIG.HEADERS,
         signal: controller.signal,
-        mode: 'cors'
       });
 
       if (!response.ok) {
@@ -102,29 +101,7 @@ export const fetchPackPurchases = async (identifier, paginationOptions = {}) => 
   };
 
   try {
-    const url = buildUrl(transactionsPage, transactionsLimit, inventoryPage, inventoryLimit);
-
-    console.log('[API Debug] Fetching from URL:', url);
-    console.log('[API Debug] Headers:', {
-      'x-admin-password': API_CONFIG.HEADERS['x-admin-password'] ? `***set (length: ${API_CONFIG.HEADERS['x-admin-password'].length})***` : '***missing***',
-      'Content-Type': API_CONFIG.HEADERS['Content-Type']
-    });
-    console.log('[API Debug] Password value check:', {
-      fromEnv: import.meta.env.VITE_ADMIN_PASSWORD ? 'set' : 'not set',
-      fromConfig: API_CONFIG.HEADERS['x-admin-password'] ? 'set' : 'not set',
-      passwordLength: API_CONFIG.HEADERS['x-admin-password']?.length || 0
-    });
-    console.log('[API Debug] Timeout:', API_CONFIG.TIMEOUT, 'ms');
-
     const data = await fetchPage(transactionsPage, transactionsLimit, inventoryPage, inventoryLimit);
-    console.log('[API Debug] Success! Received data with keys:', Object.keys(data));
-    console.log('[API Debug] Free packs data:', {
-      totalFreePacksRedeemed: data.totalFreePacksRedeemed,
-      freePackRedemptions: data.freePackRedemptions,
-      freePackRedemptionsType: Array.isArray(data.freePackRedemptions) ? 'array' : typeof data.freePackRedemptions,
-      freePackRedemptionsLength: Array.isArray(data.freePackRedemptions) ? data.freePackRedemptions.length : 'not array',
-      freePackRedemptionsSample: Array.isArray(data.freePackRedemptions) ? data.freePackRedemptions.slice(0, 2) : null
-    });
 
     // Aggregate all transaction pages so UI/export can always use the complete history.
     if (data.transactions && !Array.isArray(data.transactions) && Array.isArray(data.transactions.data)) {
@@ -183,11 +160,9 @@ export const fetchPackPurchases = async (identifier, paginationOptions = {}) => 
       throw new Error('Request timeout - please try again');
     }
 
-    // Log the actual error for debugging
     console.error('API fetch error:', {
       name: error.name,
       message: error.message,
-      stack: error.stack
     });
 
     throw error;
@@ -210,13 +185,12 @@ export const fetchClaimCode = async (code) => {
   const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
 
   try {
-    const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CLAIM_CODES}/${encodeURIComponent(normalizedCode)}/profile`;
+    const url = buildProxyUrl(`${API_CONFIG.ENDPOINTS.CLAIM_CODES}/${encodeURIComponent(normalizedCode)}/profile`);
 
     const response = await fetch(url, {
       method: 'GET',
       headers: API_CONFIG.HEADERS,
       signal: controller.signal,
-      mode: 'cors'
     });
 
     clearTimeout(timeoutId);
@@ -272,7 +246,7 @@ export const fetchClaimCode = async (code) => {
  */
 export const fetchClaimCodeBatch = async (codes = [], batchSize = 50) => {
   const allResults = [];
-  const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CLAIM_CODES}/batch-lookup`;
+  const url = buildProxyUrl(`${API_CONFIG.ENDPOINTS.CLAIM_CODES}/batch-lookup`);
 
   if (codes.length > 0) {
     // Send specific codes in batches
@@ -286,7 +260,6 @@ export const fetchClaimCodeBatch = async (codes = [], batchSize = 50) => {
           method: 'POST',
           headers: API_CONFIG.HEADERS,
           signal: controller.signal,
-          mode: 'cors',
           body: JSON.stringify({ codes: batch })
         });
 
@@ -329,7 +302,6 @@ export const fetchClaimCodeBatch = async (codes = [], batchSize = 50) => {
           method: 'POST',
           headers: API_CONFIG.HEADERS,
           signal: controller.signal,
-          mode: 'cors',
           body: JSON.stringify({ codes: [], page, limit: 100 })
         });
 

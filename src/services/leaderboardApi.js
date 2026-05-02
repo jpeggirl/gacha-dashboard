@@ -1,4 +1,4 @@
-import { API_CONFIG } from '../config/constants';
+import { API_CONFIG, buildProxyUrl } from '../config/constants';
 
 /**
  * Fetches leaderboard data
@@ -15,26 +15,15 @@ export const fetchLeaderboard = async (type = 'total') => {
   const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
 
   try {
-    const url = `https://api-pull.gacha.game/api/leaderboard/${type}`;
-    
-    console.log('[Leaderboard API] Fetching from URL:', url);
-    
+    const url = buildProxyUrl(`/api/leaderboard/${type}`);
+
     const response = await fetch(url, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        // Add admin password if needed
-        ...(API_CONFIG.HEADERS['x-admin-password'] && {
-          'x-admin-password': API_CONFIG.HEADERS['x-admin-password']
-        })
-      },
+      headers: API_CONFIG.HEADERS,
       signal: controller.signal,
-      mode: 'cors'
     });
 
     clearTimeout(timeoutId);
-
-    console.log('[Leaderboard API] Response status:', response.status, response.statusText);
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Unable to read error response');
@@ -43,22 +32,19 @@ export const fetchLeaderboard = async (type = 'total') => {
     }
 
     const data = await response.json();
-    console.log('[Leaderboard API] Success! Received data:', data);
     return data;
   } catch (error) {
     clearTimeout(timeoutId);
-    
+
     if (error.name === 'AbortError') {
       throw new Error('Request timeout - please try again');
     }
-    
+
     console.error('Leaderboard API fetch error:', {
       name: error.name,
       message: error.message,
-      stack: error.stack
     });
-    
+
     throw error;
   }
 };
-
