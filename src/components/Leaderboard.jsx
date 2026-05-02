@@ -149,12 +149,9 @@ const Leaderboard = ({ onNavigateToWallet }) => {
             Weekly
           </button>
           <button
-            onClick={() => setLeaderboardType('total')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
-              leaderboardType === 'total'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
+            disabled
+            title="All Time leaderboard is temporarily unavailable"
+            className="px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 bg-slate-100 text-slate-400 cursor-not-allowed"
           >
             <Calendar size={16} />
             All Time
