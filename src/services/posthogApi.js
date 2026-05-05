@@ -3,7 +3,7 @@ const POSTHOG_PROJECT_ID = import.meta.env.VITE_POSTHOG_PROJECT_ID;
 const POSTHOG_API_URL = `https://us.posthog.com/api/projects/${POSTHOG_PROJECT_ID}/query`;
 
 // --- Acquisition Funnel Cache ---
-const ACQUISITION_CACHE_KEY = 'acquisition_funnel_cache_v2'; // v2: includes all users, improved labels
+const ACQUISITION_CACHE_KEY = 'acquisition_funnel_cache_v3'; // v3: first-touch + last-touch
 const CACHE_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
 
 export const getAcquisitionFunnelCache = () => {
@@ -166,6 +166,35 @@ SELECT
   argMin(properties.$referring_domain, timestamp) AS referring_domain,
   argMin(properties.$geoip_country_name, timestamp) AS country,
   argMin(properties.$geoip_city_name, timestamp) AS city
+FROM events
+WHERE timestamp >= '${since}'
+  AND timestamp <= now()
+  AND distinct_id NOT LIKE '$%'
+  AND lower(distinct_id) IN (${inList})
+GROUP BY lower(distinct_id)
+`.trim();
+
+  return runHogQLQuery(query, 30000, 1);
+};
+
+/**
+ * Step 2b: Get last-touch attribution for a batch of wallets.
+ * Uses argMax instead of argMin to get the most recent session's UTM data.
+ */
+const fetchLastTouchBatch = (wallets, sinceDate) => {
+  if (wallets.length === 0) return Promise.resolve([]);
+
+  const since = sinceDate || '2026-02-01';
+  const inList = wallets.map(w => `'${w.replace(/'/g, "''")}'`).join(', ');
+  const query = `
+SELECT
+  lower(distinct_id) AS wallet,
+  argMax(properties.$session_entry_utm_source, timestamp) AS utm_source,
+  argMax(properties.$session_entry_utm_medium, timestamp) AS utm_medium,
+  argMax(properties.$session_entry_utm_campaign, timestamp) AS utm_campaign,
+  argMax(properties.$referring_domain, timestamp) AS referring_domain,
+  argMax(properties.$geoip_country_name, timestamp) AS country,
+  argMax(properties.$geoip_city_name, timestamp) AS city
 FROM events
 WHERE timestamp >= '${since}'
   AND timestamp <= now()
@@ -350,8 +379,8 @@ const joinAndGroup = (payingWallets, touchData) => {
  *   includeNonPaying — if true (requires includeEmails), also include visitors who never purchased
  *
  * Returns:
- *   When includeEmails is false: grouped array (backward compat)
- *   When includeEmails is true: { grouped, perWallet }
+ *   When includeEmails is false: { firstTouch: grouped[], lastTouch: grouped[] }
+ *   When includeEmails is true: { firstTouch: grouped[], lastTouch: grouped[], perWallet: [] }
  */
 export const fetchAcquisitionFunnel = async ({ sinceDate = null, includeEmails = false, includeNonPaying = false } = {}) => {
   if (!POSTHOG_API_KEY || !POSTHOG_PROJECT_ID ||
@@ -363,12 +392,14 @@ export const fetchAcquisitionFunnel = async ({ sinceDate = null, includeEmails =
   // Step 1: Get paying wallets from Postgres
   const payingWallets = await fetchPayingWallets(sinceDate);
   if (payingWallets.length === 0) {
-    return includeEmails ? { grouped: [], perWallet: [] } : [];
+    return includeEmails
+      ? { firstTouch: [], lastTouch: [], perWallet: [] }
+      : { firstTouch: [], lastTouch: [] };
   }
 
   console.log(`[AcquisitionFunnel] Found ${payingWallets.length} paying wallets, fetching attribution...`);
 
-  // Step 2: Fetch first-touch attribution in parallel batches
+  // Step 2: Fetch first-touch and last-touch attribution in parallel batches
   const BATCH_SIZE = 50;
   const walletAddresses = payingWallets.map(w => w.wallet);
   const batches = [];
@@ -376,25 +407,36 @@ export const fetchAcquisitionFunnel = async ({ sinceDate = null, includeEmails =
     batches.push(walletAddresses.slice(i, i + BATCH_SIZE));
   }
 
-  const batchResults = await Promise.allSettled(
-    batches.map(batch => fetchFirstTouchBatch(batch, sinceDate))
-  );
+  const [firstTouchResults, lastTouchResults] = await Promise.all([
+    Promise.allSettled(batches.map(batch => fetchFirstTouchBatch(batch, sinceDate))),
+    Promise.allSettled(batches.map(batch => fetchLastTouchBatch(batch, sinceDate))),
+  ]);
 
-  const allTouches = [];
-  batchResults.forEach((result, i) => {
+  const allFirstTouches = [];
+  firstTouchResults.forEach((result, i) => {
     if (result.status === 'fulfilled') {
-      allTouches.push(...result.value);
+      allFirstTouches.push(...result.value);
     } else {
-      console.warn(`[AcquisitionFunnel] Attribution batch ${i + 1}/${batches.length} failed:`, result.reason?.message);
+      console.warn(`[AcquisitionFunnel] First-touch batch ${i + 1}/${batches.length} failed:`, result.reason?.message);
     }
   });
 
-  console.log(`[AcquisitionFunnel] Got attribution for ${allTouches.length}/${payingWallets.length} wallets`);
+  const allLastTouches = [];
+  lastTouchResults.forEach((result, i) => {
+    if (result.status === 'fulfilled') {
+      allLastTouches.push(...result.value);
+    } else {
+      console.warn(`[AcquisitionFunnel] Last-touch batch ${i + 1}/${batches.length} failed:`, result.reason?.message);
+    }
+  });
 
-  // Step 3: Join and group client-side
-  const grouped = joinAndGroup(payingWallets, allTouches);
+  console.log(`[AcquisitionFunnel] Got first-touch for ${allFirstTouches.length}, last-touch for ${allLastTouches.length}/${payingWallets.length} wallets`);
 
-  if (!includeEmails) return grouped;
+  // Step 3: Join and group client-side (both models)
+  const firstTouch = joinAndGroup(payingWallets, allFirstTouches);
+  const lastTouch = joinAndGroup(payingWallets, allLastTouches);
+
+  if (!includeEmails) return { firstTouch, lastTouch };
 
   // Step 4: Fetch emails and build per-wallet detail rows
   // If includeNonPaying, also fetch all visitors and subtract paying wallets
@@ -418,7 +460,7 @@ export const fetchAcquisitionFunnel = async ({ sinceDate = null, includeEmails =
   const emailMap = await fetchWalletEmails(allWalletsForEmails);
   console.log(`[AcquisitionFunnel] Got emails for ${emailMap.size}/${allWalletsForEmails.length} wallets`);
 
-  const perWallet = buildPerWalletRows(payingWallets, allTouches, emailMap);
+  const perWallet = buildPerWalletRows(payingWallets, allFirstTouches, emailMap);
 
   if (includeNonPaying && nonPayingRows.length > 0) {
     for (const v of nonPayingRows) {
@@ -442,7 +484,7 @@ export const fetchAcquisitionFunnel = async ({ sinceDate = null, includeEmails =
     }
   }
 
-  return { grouped, perWallet };
+  return { firstTouch, lastTouch, perWallet };
 };
 
 // --- Per-wallet acquisition (for wallet profile page) ---

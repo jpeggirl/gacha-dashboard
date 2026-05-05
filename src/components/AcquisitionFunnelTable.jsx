@@ -73,104 +73,58 @@ const WalletDropdown = ({ wallets, onNavigateToWallet }) => {
   );
 };
 
-const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
-  const [data, setData] = useState([]);
-  const [perWalletData, setPerWalletData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [cachedAt, setCachedAt] = useState(null);
-  const [sourceFilter, setSourceFilter] = useState('all');
-  const [mediumFilter, setMediumFilter] = useState('all');
+const columns = [
+  { key: 'first_seen', label: 'First Seen' },
+  { key: 'utm_source', label: 'Source' },
+  { key: 'utm_medium', label: 'Medium' },
+  { key: 'utm_campaign', label: 'Campaign' },
+  { key: 'referring_domain', label: 'Referrer' },
+  { key: 'country', label: 'Country' },
+  { key: 'unique_buyers', label: 'Buyers', numeric: true },
+  { key: 'total_purchases', label: 'Purchases', numeric: true },
+  { key: 'total_revenue', label: 'Purchase', numeric: true }
+];
+
+const PAGE_SIZE = 15;
+
+const formatDate = (val) => {
+  if (!val) return '\u2014';
+  const d = new Date(val);
+  if (isNaN(d)) return '\u2014';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    + ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+};
+
+const COLOR_THEMES = {
+  blue: {
+    headerBg: 'bg-blue-50',
+    headerText: 'text-blue-900',
+    headerBorder: 'border-blue-200',
+    badge: 'bg-blue-100 text-blue-700',
+    subtitleText: 'text-blue-500',
+    accentBorder: 'border-l-4 border-l-blue-500',
+  },
+  amber: {
+    headerBg: 'bg-amber-50',
+    headerText: 'text-amber-900',
+    headerBorder: 'border-amber-200',
+    badge: 'bg-amber-100 text-amber-700',
+    subtitleText: 'text-amber-500',
+    accentBorder: 'border-l-4 border-l-amber-400',
+  },
+};
+
+const AttributionTable = ({ data, title, subtitle, onNavigateToWallet, color = 'blue' }) => {
+  const theme = COLOR_THEMES[color];
   const [sortConfig, setSortConfig] = useState({ key: 'first_seen', direction: 'desc' });
   const [page, setPage] = useState(1);
-  const PAGE_SIZE = 15;
+  const [sourceFilter, setSourceFilter] = useState('all');
+  const [mediumFilter, setMediumFilter] = useState('all');
+  const [campaignFilter, setCampaignFilter] = useState('all');
 
-  // Date range state
-  const [datePreset, setDatePreset] = useState('7d');
-  const [customFrom, setCustomFrom] = useState('');
-  const [customTo, setCustomTo] = useState('');
-  const [exporting, setExporting] = useState(false);
-  const [includeNonPaying, setIncludeNonPaying] = useState(false);
-
-  useEffect(() => {
-    loadData('7d');
-  }, []);
-
-  const isDefaultRange = (preset) => preset === 'all';
-
-  const loadData = async (preset, fromOverride) => {
-    setError(null);
-    const sinceDate = getSinceDate(preset, fromOverride);
-    const useCache = isDefaultRange(preset);
-
-    // For default range, try cache first
-    if (useCache) {
-      const cache = getAcquisitionFunnelCache();
-      if (cache) {
-        setData(cache.data);
-        setPerWalletData([]);
-        setCachedAt(cache.cachedAt);
-        setLoading(false);
-
-        if (!isCacheStale(cache.cachedAt)) {
-          return;
-        }
-
-        setRefreshing(true);
-        try {
-          const freshRows = await fetchAcquisitionFunnel({ sinceDate: cache.cachedAt });
-          if (freshRows.length > 0) {
-            const merged = mergeAcquisitionData(cache.data, freshRows);
-            saveAcquisitionFunnelCache(merged);
-            setData(merged);
-          } else {
-            saveAcquisitionFunnelCache(cache.data);
-          }
-          setCachedAt(new Date().toISOString());
-        } catch (err) {
-          console.warn('[AcquisitionFunnel] Incremental refresh failed, using cached data:', err.message);
-        } finally {
-          setRefreshing(false);
-        }
-        return;
-      }
-    }
-
-    // Fresh fetch (no cache or non-default range)
-    setLoading(true);
-    setPerWalletData([]);
-    try {
-      const result = await fetchAcquisitionFunnel({ sinceDate });
-      // result is always grouped array for non-email fetches
-      const rows = result;
-      if (useCache) {
-        saveAcquisitionFunnelCache(rows);
-      }
-      setData(rows);
-      setCachedAt(useCache ? new Date().toISOString() : null);
-    } catch (err) {
-      console.error('[AcquisitionFunnel]', err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDatePresetChange = (preset) => {
-    setDatePreset(preset);
-    setPage(1);
-    if (preset !== 'custom') {
-      loadData(preset);
-    }
-  };
-
-  const handleCustomDateApply = () => {
-    if (customFrom) {
-      setPage(1);
-      loadData('custom', customFrom);
-    }
-  };
+  const sourceOptions = useMemo(() => [...new Set(data.map(r => r.utm_source))].sort(), [data]);
+  const mediumOptions = useMemo(() => [...new Set(data.map(r => r.utm_medium))].sort(), [data]);
+  const campaignOptions = useMemo(() => [...new Set(data.map(r => r.utm_campaign))].filter(c => c && c !== 'none').sort(), [data]);
 
   const handleSort = (key) => {
     setSortConfig(prev => ({
@@ -180,17 +134,14 @@ const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
     setPage(1);
   };
 
-  // Unique values for dropdown filters
-  const sourceOptions = useMemo(() => [...new Set(data.map(r => r.utm_source))].sort(), [data]);
-  const mediumOptions = useMemo(() => [...new Set(data.map(r => r.utm_medium))].sort(), [data]);
-
   const filtered = useMemo(() => {
     return data.filter(row => {
       if (sourceFilter !== 'all' && row.utm_source !== sourceFilter) return false;
       if (mediumFilter !== 'all' && row.utm_medium !== mediumFilter) return false;
+      if (campaignFilter !== 'all' && row.utm_campaign !== campaignFilter) return false;
       return true;
     });
-  }, [data, sourceFilter, mediumFilter]);
+  }, [data, sourceFilter, mediumFilter, campaignFilter]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -223,19 +174,238 @@ const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
     total_revenue: filtered.reduce((s, r) => s + (r.total_revenue || 0), 0)
   }), [filtered]);
 
+  if (sorted.length === 0) {
+    return (
+      <div className={`mb-6 ${theme.accentBorder}`}>
+        <div className={`px-6 py-3 ${theme.headerBg} border-b ${theme.headerBorder}`}>
+          <div className="flex items-center gap-2">
+            <h3 className={`text-lg font-semibold ${theme.headerText}`}>{title}</h3>
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${theme.badge}`}>{color === 'blue' ? 'Last' : 'First'}</span>
+          </div>
+          <p className={`text-xs ${theme.subtitleText}`}>{subtitle}</p>
+          <div className="flex items-center gap-1.5 mt-2">
+            <Filter size={12} className="text-slate-400" />
+            <select value={sourceFilter} onChange={e => { setSourceFilter(e.target.value); setPage(1); }} className="px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
+              <option value="all">All Sources</option>
+              {sourceOptions.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <select value={mediumFilter} onChange={e => { setMediumFilter(e.target.value); setPage(1); }} className="px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
+              <option value="all">All Mediums</option>
+              {mediumOptions.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+            <select value={campaignFilter} onChange={e => { setCampaignFilter(e.target.value); setPage(1); }} className="px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
+              <option value="all">All Campaigns</option>
+              {campaignOptions.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="text-center py-8">
+          <p className="text-slate-400 text-sm">No data for current filters.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`mb-6 ${theme.accentBorder}`}>
+      <div className={`px-6 py-3 ${theme.headerBg} border-b ${theme.headerBorder}`}>
+        <div className="flex items-center gap-2">
+          <h3 className={`text-lg font-semibold ${theme.headerText}`}>{title}</h3>
+          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${theme.badge}`}>{color === 'blue' ? 'Last' : 'First'}</span>
+        </div>
+        <p className={`text-xs ${theme.subtitleText}`}>{subtitle}</p>
+        <div className="flex items-center gap-1.5 mt-2">
+          <Filter size={12} className="text-slate-400" />
+          <select value={sourceFilter} onChange={e => { setSourceFilter(e.target.value); setPage(1); }} className="px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
+            <option value="all">All Sources</option>
+            {sourceOptions.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select value={mediumFilter} onChange={e => { setMediumFilter(e.target.value); setPage(1); }} className="px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
+            <option value="all">All Mediums</option>
+            {mediumOptions.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+          <select value={campaignFilter} onChange={e => { setCampaignFilter(e.target.value); setPage(1); }} className="px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
+            <option value="all">All Campaigns</option>
+            {campaignOptions.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+      </div>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className={`border-b ${theme.headerBorder} ${theme.headerBg}`}>
+            {columns.map(col => (
+              <th
+                key={col.key}
+                onClick={() => handleSort(col.key)}
+                className={`px-4 py-3 font-semibold text-slate-600 cursor-pointer hover:bg-slate-100 select-none whitespace-nowrap ${col.numeric ? 'text-right' : 'text-left'}`}
+              >
+                <span className="inline-flex items-center gap-1">
+                  {col.label}
+                  <SortIcon column={col.key} sortConfig={sortConfig} />
+                </span>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {pageData.map((row, i) => (
+            <tr key={i} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+              <td className="px-4 py-3 text-slate-500 whitespace-nowrap text-xs">{formatDate(row.first_seen)}</td>
+              <td className="px-4 py-3 text-slate-700">{row.utm_source}</td>
+              <td className="px-4 py-3 text-slate-700">{row.utm_medium}</td>
+              <td className="px-4 py-3 text-slate-700 max-w-[200px] truncate" title={row.utm_campaign}>
+                {row.utm_campaign}
+              </td>
+              <td className="px-4 py-3 text-slate-700">{row.referring_domain}</td>
+              <td className="px-4 py-3 text-slate-700">{row.country}</td>
+              <td className="px-4 py-3 text-right font-medium text-slate-900">
+                <WalletDropdown wallets={row.wallets} onNavigateToWallet={onNavigateToWallet} />
+              </td>
+              <td className="px-4 py-3 text-right font-medium text-slate-900">{row.total_purchases?.toLocaleString()}</td>
+              <td className="px-4 py-3 text-right font-semibold text-emerald-700">${row.total_revenue?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr className="bg-slate-50 border-t-2 border-slate-200">
+            <td colSpan={6} className="px-4 py-3 font-semibold text-slate-700">
+              Totals ({filtered.length} rows)
+            </td>
+            <td className="px-4 py-3 text-right font-bold text-slate-900">{totals.unique_buyers.toLocaleString()}</td>
+            <td className="px-4 py-3 text-right font-bold text-slate-900">{totals.total_purchases.toLocaleString()}</td>
+            <td className="px-4 py-3 text-right font-bold text-emerald-700">${totals.total_revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200">
+          <p className="text-sm text-slate-500">
+            Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, sorted.length)} of {sorted.length}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Previous
+            </button>
+            <span className="text-sm text-slate-600">
+              Page {page} of {totalPages}
+            </span>
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
+  const [firstTouchData, setFirstTouchData] = useState([]);
+  const [lastTouchData, setLastTouchData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [cachedAt, setCachedAt] = useState(null);
+  // Date range state
+  const [datePreset, setDatePreset] = useState('7d');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [includeNonPaying, setIncludeNonPaying] = useState(false);
+
+  useEffect(() => {
+    loadData('7d');
+  }, []);
+
+  const isDefaultRange = (preset) => preset === 'all';
+
+  const loadData = async (preset, fromOverride) => {
+    setError(null);
+    const sinceDate = getSinceDate(preset, fromOverride);
+    const useCache = isDefaultRange(preset);
+
+    // For default range, try cache first
+    if (useCache) {
+      const cache = getAcquisitionFunnelCache();
+      if (cache && cache.data && cache.data.firstTouch) {
+        setFirstTouchData(cache.data.firstTouch);
+        setLastTouchData(cache.data.lastTouch || []);
+        setCachedAt(cache.cachedAt);
+        setLoading(false);
+
+        if (!isCacheStale(cache.cachedAt)) {
+          return;
+        }
+
+        setRefreshing(true);
+        try {
+          const fresh = await fetchAcquisitionFunnel({ sinceDate: cache.cachedAt });
+          if (fresh.firstTouch.length > 0 || fresh.lastTouch.length > 0) {
+            const mergedFirst = mergeAcquisitionData(cache.data.firstTouch, fresh.firstTouch);
+            const mergedLast = mergeAcquisitionData(cache.data.lastTouch || [], fresh.lastTouch);
+            const merged = { firstTouch: mergedFirst, lastTouch: mergedLast };
+            saveAcquisitionFunnelCache(merged);
+            setFirstTouchData(mergedFirst);
+            setLastTouchData(mergedLast);
+          } else {
+            saveAcquisitionFunnelCache(cache.data);
+          }
+          setCachedAt(new Date().toISOString());
+        } catch (err) {
+          console.warn('[AcquisitionFunnel] Incremental refresh failed, using cached data:', err.message);
+        } finally {
+          setRefreshing(false);
+        }
+        return;
+      }
+    }
+
+    // Fresh fetch (no cache or non-default range)
+    setLoading(true);
+    try {
+      const result = await fetchAcquisitionFunnel({ sinceDate });
+      if (useCache) {
+        saveAcquisitionFunnelCache(result);
+      }
+      setFirstTouchData(result.firstTouch);
+      setLastTouchData(result.lastTouch);
+      setCachedAt(useCache ? new Date().toISOString() : null);
+    } catch (err) {
+      console.error('[AcquisitionFunnel]', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDatePresetChange = (preset) => {
+    setDatePreset(preset);
+    if (preset !== 'custom') {
+      loadData(preset);
+    }
+  };
+
+  const handleCustomDateApply = () => {
+    if (customFrom) {
+      loadData('custom', customFrom);
+    }
+  };
+
   const exportCSV = async () => {
     setExporting(true);
     try {
-      // Fetch per-wallet detail with emails for the current date range
       const sinceDate = getSinceDate(datePreset, customFrom);
       const result = await fetchAcquisitionFunnel({ sinceDate, includeEmails: true, includeNonPaying });
-      let rows = result.perWallet || [];
-      if (sourceFilter !== 'all') {
-        rows = rows.filter(r => r.utm_source === sourceFilter);
-      }
-      if (mediumFilter !== 'all') {
-        rows = rows.filter(r => r.utm_medium === mediumFilter);
-      }
+      const rows = result.perWallet || [];
 
       const headers = ['wallet', 'email', 'utm_source', 'utm_medium', 'utm_campaign', 'referring_domain', 'country', 'total_purchases', 'total_spent', 'first_purchase_at', 'first_seen_at'];
       const csvRows = [headers.join(',')];
@@ -252,11 +422,7 @@ const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      const filterSuffix = [
-        sourceFilter !== 'all' ? sourceFilter : '',
-        mediumFilter !== 'all' ? mediumFilter : '',
-      ].filter(Boolean).join('_');
-      a.download = `acquisition_detail_${new Date().toISOString().slice(0, 10)}${filterSuffix ? '_' + filterSuffix : ''}.csv`;
+      a.download = `acquisition_detail_${new Date().toISOString().slice(0, 10)}.csv`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
@@ -266,26 +432,6 @@ const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
       setExporting(false);
     }
   };
-
-  const formatDate = (val) => {
-    if (!val) return '\u2014';
-    const d = new Date(val);
-    if (isNaN(d)) return '\u2014';
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-      + ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-  };
-
-  const columns = [
-    { key: 'first_seen', label: 'First Seen' },
-    { key: 'utm_source', label: 'Source' },
-    { key: 'utm_medium', label: 'Medium' },
-    { key: 'utm_campaign', label: 'Campaign' },
-    { key: 'referring_domain', label: 'Referrer' },
-    { key: 'country', label: 'Country' },
-    { key: 'unique_buyers', label: 'Buyers', numeric: true },
-    { key: 'total_purchases', label: 'Purchases', numeric: true },
-    { key: 'total_revenue', label: 'Purchase', numeric: true }
-  ];
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
@@ -362,27 +508,7 @@ const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
           </div>
         </div>
 
-        {/* Filters + export */}
         <div className="flex items-center gap-3 flex-wrap mt-3">
-          <div className="flex items-center gap-1.5">
-            <Filter size={14} className="text-slate-400" />
-            <select
-              value={sourceFilter}
-              onChange={e => { setSourceFilter(e.target.value); setPage(1); }}
-              className="px-2 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-            >
-              <option value="all">All Sources</option>
-              {sourceOptions.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <select
-              value={mediumFilter}
-              onChange={e => { setMediumFilter(e.target.value); setPage(1); }}
-              className="px-2 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-            >
-              <option value="all">All Mediums</option>
-              {mediumOptions.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-          </div>
           <label className="flex items-center gap-1.5 text-sm text-slate-600 cursor-pointer select-none">
             <input
               type="checkbox"
@@ -394,7 +520,7 @@ const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
           </label>
           <button
             onClick={exportCSV}
-            disabled={data.length === 0 || exporting}
+            disabled={(firstTouchData.length === 0 && lastTouchData.length === 0) || exporting}
             className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {exporting ? <RefreshCw size={14} className="animate-spin" /> : <Download size={14} />}
@@ -421,87 +547,28 @@ const AcquisitionFunnelTable = ({ onNavigateToWallet }) => {
               </button>
             </div>
           </div>
-        ) : sorted.length === 0 ? (
+        ) : firstTouchData.length === 0 && lastTouchData.length === 0 ? (
           <div className="text-center py-16">
             <Users className="text-slate-300 mx-auto mb-4" size={48} />
             <p className="text-slate-500">No acquisition data found.</p>
           </div>
         ) : (
           <>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50">
-                  {columns.map(col => (
-                    <th
-                      key={col.key}
-                      onClick={() => handleSort(col.key)}
-                      className={`px-4 py-3 font-semibold text-slate-600 cursor-pointer hover:bg-slate-100 select-none whitespace-nowrap ${col.numeric ? 'text-right' : 'text-left'}`}
-                    >
-                      <span className="inline-flex items-center gap-1">
-                        {col.label}
-                        <SortIcon column={col.key} sortConfig={sortConfig} />
-                      </span>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {pageData.map((row, i) => (
-                  <tr key={i} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3 text-slate-500 whitespace-nowrap text-xs">{formatDate(row.first_seen)}</td>
-                    <td className="px-4 py-3 text-slate-700">{row.utm_source}</td>
-                    <td className="px-4 py-3 text-slate-700">{row.utm_medium}</td>
-                    <td className="px-4 py-3 text-slate-700 max-w-[200px] truncate" title={row.utm_campaign}>
-                      {row.utm_campaign}
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">{row.referring_domain}</td>
-                    <td className="px-4 py-3 text-slate-700">{row.country}</td>
-                    <td className="px-4 py-3 text-right font-medium text-slate-900">
-                      <WalletDropdown wallets={row.wallets} onNavigateToWallet={onNavigateToWallet} />
-                    </td>
-                    <td className="px-4 py-3 text-right font-medium text-slate-900">{row.total_purchases?.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-emerald-700">${row.total_revenue?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="bg-slate-50 border-t-2 border-slate-200">
-                  <td colSpan={6} className="px-4 py-3 font-semibold text-slate-700">
-                    Totals ({filtered.length} rows)
-                  </td>
-                  <td className="px-4 py-3 text-right font-bold text-slate-900">{totals.unique_buyers.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-right font-bold text-slate-900">{totals.total_purchases.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-right font-bold text-emerald-700">${totals.total_revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                </tr>
-              </tfoot>
-            </table>
-
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200">
-                <p className="text-sm text-slate-500">
-                  Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, sorted.length)} of {sorted.length}
-                </p>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                    className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Previous
-                  </button>
-                  <span className="text-sm text-slate-600">
-                    Page {page} of {totalPages}
-                  </span>
-                  <button
-                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                    disabled={page === totalPages}
-                    className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            )}
+            <AttributionTable
+              data={lastTouchData}
+              title="Last-Touch Attribution"
+              subtitle="Credits the most recent campaign before purchase — matches GA's default view"
+              onNavigateToWallet={onNavigateToWallet}
+              color="blue"
+            />
+            <div className="border-t-2 border-slate-300 my-2" />
+            <AttributionTable
+              data={firstTouchData}
+              title="First-Touch Attribution"
+              subtitle="Credits the first campaign that introduced the user"
+              onNavigateToWallet={onNavigateToWallet}
+              color="amber"
+            />
           </>
         )}
       </div>
