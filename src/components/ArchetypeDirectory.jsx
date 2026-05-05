@@ -65,8 +65,8 @@ const ArchetypeDirectory = ({ onNavigateToWallet }) => {
     grouped[arch].push(profile);
   }
 
-  // Order: steady-periodic first (ICP), then binge-episodes, binge-and-gone, unclassified
-  const displayOrder = ['steady-periodic', 'binge-episodes', 'binge-and-gone', 'unclassified'];
+  // Order: whale first, then steady-periodic (ICP), binge-episodes, binge-and-gone, unclassified
+  const displayOrder = ['whale', 'steady-periodic', 'binge-episodes', 'binge-and-gone', 'unclassified'];
 
   const toggleExpand = (archetype) => {
     setExpandedArchetype(expandedArchetype === archetype ? null : archetype);

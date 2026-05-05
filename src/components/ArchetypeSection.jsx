@@ -171,6 +171,7 @@ const ArchetypeSection = ({ walletAddress, transactions, onArchetypeUpdate, data
           {/* Metrics Breakdown */}
           {metrics && (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+              <MetricItem label="Total Spent" value={metrics.totalSpent ? `$${metrics.totalSpent.toLocaleString()}` : '-'} />
               <MetricItem label="Active Days" value={metrics.activeDays} />
               <MetricItem label="Sessions" value={metrics.sessionClusters?.length || 0} />
               <MetricItem label="Avg Gap" value={metrics.avgGap ? `${metrics.avgGap}d` : '-'} />

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Zap, Repeat, Activity } from 'lucide-react';
+import { Zap, Repeat, Activity, Crown } from 'lucide-react';
 import { ARCHETYPES } from '../config/constants';
 
 const STATUS_DOTS = {
@@ -9,6 +9,11 @@ const STATUS_DOTS = {
 };
 
 const ARCHETYPE_STYLES = {
+  'whale': {
+    bg: 'bg-purple-100',
+    text: 'text-purple-700',
+    icon: Crown,
+  },
   'binge-and-gone': {
     bg: 'bg-rose-100',
     text: 'text-rose-700',

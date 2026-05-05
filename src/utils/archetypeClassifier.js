@@ -10,6 +10,7 @@ export function computeBehavioralMetrics(transactions) {
     return {
       activeDays: 0,
       totalPurchases: 0,
+      totalSpent: 0,
       firstPurchaseDate: null,
       lastPurchaseDate: null,
       daysSinceLastPurchase: null,
@@ -31,6 +32,9 @@ export function computeBehavioralMetrics(transactions) {
     .sort((a, b) => a.date - b.date);
 
   // Group by calendar date (YYYY-MM-DD)
+  // Total spend across all transactions
+  const totalSpent = dated.reduce((sum, tx) => sum + (Number(tx.price) || 0), 0);
+
   const clusterMap = {};
   for (const tx of dated) {
     const dayKey = tx.date.toISOString().split('T')[0];
@@ -87,6 +91,7 @@ export function computeBehavioralMetrics(transactions) {
   return {
     activeDays,
     totalPurchases,
+    totalSpent,
     firstPurchaseDate,
     lastPurchaseDate,
     daysSinceLastPurchase,
@@ -106,6 +111,11 @@ export function computeBehavioralMetrics(transactions) {
  */
 export function classifyArchetype(metrics) {
   const t = ARCHETYPE_THRESHOLDS;
+
+  // Whale: total spend exceeds threshold (checked first — overrides other patterns)
+  if (metrics.totalSpent >= t.whale.minTotalSpent) {
+    return 'whale';
+  }
 
   // Binge-and-gone: single active day with many purchases
   if (

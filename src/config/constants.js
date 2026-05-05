@@ -127,10 +127,17 @@ export const DEFAULT_TAGS = [
 
 // Archetype Definitions
 export const ARCHETYPES = {
+  'whale': {
+    id: 'whale',
+    label: 'Whale',
+    description: '$30k+ total spend',
+    icpLikelihood: 'high',
+    color: 'purple',
+  },
   'binge-and-gone': {
     id: 'binge-and-gone',
     label: 'Binge & Gone',
-    description: '30+ purchases in one session, never returns',
+    description: '10+ purchases in one session, never returns',
     icpLikelihood: 'low',
     color: 'rose',
   },
@@ -144,7 +151,7 @@ export const ARCHETYPES = {
   'steady-periodic': {
     id: 'steady-periodic',
     label: 'Steady Periodic',
-    description: '14+ active days, measured pace',
+    description: '5+ active days, measured pace',
     icpLikelihood: 'high',
     color: 'teal',
   },
@@ -159,16 +166,19 @@ export const ARCHETYPES = {
 
 // Tunable thresholds for archetype classification
 export const ARCHETYPE_THRESHOLDS = {
+  whale: {
+    minTotalSpent: 30000,
+  },
   bingeAndGone: {
-    minPurchases: 30,
+    minPurchases: 10,
   },
   bingeEpisodes: {
     minSessions: 2,
-    minSessionPurchases: 20,
-    minMaxGap: 7,
+    minSessionPurchases: 8,
+    minMaxGap: 5,
   },
   steadyPeriodic: {
-    minActiveDays: 14,
+    minActiveDays: 5,
   },
 };
 
