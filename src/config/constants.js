@@ -130,7 +130,7 @@ export const ARCHETYPES = {
   'whale': {
     id: 'whale',
     label: 'Whale',
-    description: '$30k+ total spend',
+    description: '$10k+ total spend',
     icpLikelihood: 'high',
     color: 'purple',
   },
@@ -167,7 +167,7 @@ export const ARCHETYPES = {
 // Tunable thresholds for archetype classification
 export const ARCHETYPE_THRESHOLDS = {
   whale: {
-    minTotalSpent: 30000,
+    minTotalSpent: 10000,
   },
   bingeAndGone: {
     minPurchases: 10,

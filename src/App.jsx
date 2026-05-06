@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { ArrowDownLeft, DollarSign, Package, TrendingDown, TrendingUp, Trophy, Wallet } from 'lucide-react';
 
 // Services
@@ -23,14 +23,16 @@ import EmptyState from './components/EmptyState';
 import TimeFrameFilter from './components/TimeFrameFilter';
 import Login from './components/Login';
 import HomePage from './components/HomePage';
-import ClaimCodeROI from './components/ClaimCodeROI';
 import ProfileComments from './components/ProfileComments';
 import FreePacksSection from './components/FreePacksSection';
 import UserTags from './components/UserTags';
 import ArchetypeSection from './components/ArchetypeSection';
-import ArchetypeDirectory from './components/ArchetypeDirectory';
 import AcquisitionInfo from './components/AcquisitionInfo';
-import AcquisitionFunnelTable from './components/AcquisitionFunnelTable';
+
+// Lazy-load heavy route-level components
+const ClaimCodeROI = lazy(() => import('./components/ClaimCodeROI'));
+const ArchetypeDirectory = lazy(() => import('./components/ArchetypeDirectory'));
+const AcquisitionFunnelTable = lazy(() => import('./components/AcquisitionFunnelTable'));
 
 // Config
 import { DEFAULT_WALLET, DEFAULT_TRANSACTIONS_LIMIT, DEFAULT_INVENTORY_LIMIT } from './config/constants';
@@ -386,14 +388,7 @@ function App() {
     fetchData(null, null, { inventoryPage: page });
   };
 
-  // Auto-load on mount
-  useEffect(() => {
-    // Only fetch if we have a search term
-    if (searchTerm.trim()) {
-      fetchData();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // No auto-fetch on mount — data loads when the user navigates to a wallet view
 
   // Derive analytics from data - no more client-side time frame re-filtering of transactions
   // KPIs come from root-level totalSpent/totalWinnings/rtp; charts use packBreakdown
@@ -434,8 +429,6 @@ function App() {
     };
   }, [pullsData, stats?.totalSpent]);
 
-  // Debug: Log to verify component is rendering
-  console.log('App rendering', { loading, hasData: !!data, hasStats: !!stats, error });
 
   // Show login page if not authenticated
   if (!isAuthenticated) {
@@ -483,7 +476,9 @@ function App() {
       <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
         <Header {...headerProps} />
         <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <AcquisitionFunnelTable onNavigateToWallet={navigateToWallet} />
+          <Suspense fallback={<LoadingOverlay />}>
+            <AcquisitionFunnelTable onNavigateToWallet={navigateToWallet} />
+          </Suspense>
         </main>
       </div>
     );
@@ -495,7 +490,9 @@ function App() {
       <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
         <Header {...headerProps} />
         <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <ClaimCodeROI onNavigateToWallet={navigateToWallet} />
+          <Suspense fallback={<LoadingOverlay />}>
+            <ClaimCodeROI onNavigateToWallet={navigateToWallet} />
+          </Suspense>
         </main>
       </div>
     );
@@ -507,7 +504,9 @@ function App() {
       <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
         <Header {...headerProps} />
         <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <ArchetypeDirectory onNavigateToWallet={navigateToWallet} />
+          <Suspense fallback={<LoadingOverlay />}>
+            <ArchetypeDirectory onNavigateToWallet={navigateToWallet} />
+          </Suspense>
         </main>
       </div>
     );
